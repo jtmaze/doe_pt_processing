@@ -1,4 +1,3 @@
-#####
 
 library(tidyverse)
 library(readxl)
@@ -8,7 +7,7 @@ library(rlang)
 
 # 
 site_ts_from_xlsx_sheet <- function(compiled_path, site_id) {
-
+  
   data <- read_excel(compiled_path, sheet=site_id) %>% 
     select(c('Date', 'Site', 'depth', 'Water_press', 'sensor_depth'))
   
@@ -18,7 +17,9 @@ site_ts_from_xlsx_sheet <- function(compiled_path, site_id) {
 
 fetch_water_checks <- function(meta_path, site_id){
   
-  check_history <- read_excel(meta_path, sheet='Wetland_H20_level_history')
+  check_history <- read_excel(meta_path, 
+                              sheet='Wetland_H20_level_history',
+                              na=c("", "NA", "#N/A", "N/A"))
   check_history <- check_history %>% 
     filter(Site_ID == site_id)
   
@@ -66,35 +67,31 @@ fetch_water_checks <- function(meta_path, site_id){
   return(check_history_long)
 }
 
-make_site_ts <- function(site_ts, y_var, qaqc_df) {
-  # Convert the y_var name to a string internally
-  y_var_sym  <- rlang::ensym(y_var)
-  y_var_name <- rlang::as_string(y_var_sym)
+fetch_post_process_status <- function(path, site_id){
   
-  site_id <- site_ts %>% 
-    pull(Site) %>% 
-    unique()
+  basin_id <- str_split_1(site_id, pattern="_")[1]
   
-  fig <- site_ts %>%
-    plot_ly(
-      x = ~Date,
-      # Convert the string into a plotly formula, e.g. "~WaterLevel_m"
-      y = as.formula(paste0("~", y_var_name)), 
-      type = "scatter",
-      mode = "lines"
-    ) %>%
-    layout(title = glue("PT Data for Wetland {site_id}"))
+  col_spec <- c(
+    "Wetland" = "text",
+    "Logger WL and Measured WL Difference (m)" = "numeric",
+    "WL Date" = "date",
+    "Logger WL and Measured WL Difference 2 (m)" = "numeric",
+    "WL Date 2" = "date",
+    "Logger WL and Measured WL Difference 3 (m)" = "numeric",
+    "WD Date 3" = "date", 
+    "Logger or Field Measurement Logger" = 'text',
+    "Bottoms out?" = "text", 
+    "Bottom out depth (m)" = "numeric",
+    "Notes" = "text"
+  )
   
-  fig <- fig %>%
-    add_trace(
-      data = qaqc_df,
-      x = ~date,
-      y = ~meter,
-      type = "scatter",
-      mode = "markers",
-      marker = list(color = "red", size = 10),
-      name = "QA/QC"
-    )
+  status <- read_excel(path, 
+                       sheet=paste0("Basin ", basin_id),
+                       col_types = col_spec,
+                       na = c("", "NA", "#N/A", "N/A")) %>% 
+    # Reading all columns as "text", because of excel's wonky auto formatting. 
+    # Dates were listed as integers. 
+    filter(Wetland == site_id)
   
-  fig
+  return(status)
 }
