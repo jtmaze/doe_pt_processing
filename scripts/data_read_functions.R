@@ -9,7 +9,8 @@ library(rlang)
 site_ts_from_xlsx_sheet <- function(compiled_path, site_id) {
   
   data <- read_excel(compiled_path, sheet=site_id) %>% 
-    select(c('Date', 'Site', 'depth', 'Water_press', 'sensor_depth'))
+    select(c('Date', 'Site', 'depth', 'Water_press', 'sensor_depth')) %>% 
+    rename(Site_ID = Site)
   
   return(data)
   
@@ -46,7 +47,7 @@ fetch_water_checks <- function(meta_path, site_id){
   date_cols <- grep("^H20_date_", names(check_history), value = TRUE)
   check_history <- check_history %>%
     mutate(across(all_of(cm_cols), ~ as.numeric(.))) %>% 
-    mutate(across(all_of(date_cols), ~ as.POSIXct(., format = "%Y-%m-%d %H:%M:%S")))
+    mutate(across(all_of(date_cols), ~ as.POSIXct(., format = "%Y-%m-%d")))
   
   # Pivot the data from wide to long format
   check_history_long <- check_history %>%
@@ -66,6 +67,7 @@ fetch_water_checks <- function(meta_path, site_id){
   
   return(check_history_long)
 }
+
 
 fetch_post_process_status <- function(path, site_id){
   
@@ -91,7 +93,52 @@ fetch_post_process_status <- function(path, site_id){
                        na = c("", "NA", "#N/A", "N/A")) %>% 
     # Reading all columns as "text", because of excel's wonky auto formatting. 
     # Dates were listed as integers. 
-    filter(Wetland == site_id)
+    filter(Wetland == site_id) %>% 
+    rename(Site_ID = Wetland)
   
   return(status)
 }
+
+fetch_pivot_history <- function(path, site_id){
+  
+  select_cols <- c(
+    "Site_ID",
+    "P_G/L_date_1",
+    "P_G_cm_1", 
+    "P_L_cm_1",
+    "P_G/L_date_2", 
+    "P_G_cm_2",
+    "P_L_cm_2", 
+    "P_G/L_date_3", 
+    "P_G_cm_3",
+    "P_L_cm_3", 
+    "P_G/L_date_4", 
+    "P_G_cm_4",
+    "P_L_cm_4"
+  )
+  
+  P_G_cols <- grep("P_G_cm_", select_cols, value=TRUE)
+  P_L_cols <- grep("P_L_cm_", select_cols, value=TRUE)
+  date_cols <- grep("P_G/L_date_", select_cols, value=TRUE)
+  
+  pivot_history <- read_excel(path, sheet = "Wetland_pivot_history") %>% 
+    filter(Site_ID == site_id) %>% 
+    select(all_of(select_cols)) %>% 
+    mutate(across(all_of(P_G_cols), ~ as.numeric(.)),
+           across(all_of(P_L_cols), ~ as.numeric(.)),
+           across(all_of(date_cols),  ~ as.POSIXct(., format = "%Y-%m-%d")))
+  
+  # For ever P_G and P_L column, calculate the corresponding "offset" column
+  for(i in seq_along(P_G_cols)){
+    pivot_history <- pivot_history %>% 
+      mutate(!!paste0("offset_m_", i) := (
+        .data[[paste0("P_L_cm_", i)]] - .data[[paste0("P_G_cm_", i)]]) / 100)
+  }
+  
+  # Remove any columns with NA values
+  pivot_history <- pivot_history %>% 
+    select(where(~ !anyNA(.)))
+  
+  return(pivot_history)
+}
+

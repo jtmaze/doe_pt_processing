@@ -28,17 +28,47 @@ print(data_colnames)
 
 print(unique_wetland_wells)
 
-site <- unique_wetland_wells[12]
+site <- unique_wetland_wells[5]
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# Step 3: Explore Timeseries -------------------------------------------------------
+# Step 3: Fetch Site Specific Data -------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 data <- site_ts_from_xlsx_sheet(compiled_path, site)
 status <- fetch_post_process_status(status_path, site)
 qaqc <- fetch_water_checks(meta_data_path, site) 
+pivot_hist <- fetch_pivot_history(meta_data_path, site)
 
-make_site_ts2(site_ts=data, 
-              y_vars = c("depth", "sensor_depth", "Water_press"), 
+# Merge the pivot history with the site data
+data_full <- merge(data, pivot_hist, by="Site_ID", all=TRUE) 
+# Merge the status notes with data_full 
+data_full <- merge(data_full, 
+                   status %>% select(c(Site_ID, Notes)), 
+                   by="Site_ID", 
+                   all=TRUE)
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Step 4: Apply different offsets -------------------------------------------------------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+drop_cols <- c(
+  "P_G/L_date_1",
+  "P_G/L_date_2", 
+  "P_G/L_date_3", 
+  "P_G/L_date_4" 
+)
+
+data_full <- data_full %>% select(-any_of(drop_cols))
+
+data_full <- data_full %>% 
+  mutate(depth_v1 = Water_press - offset_m_1,
+         depth_v2 = Water_press - offset_m_2)
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Step 4: Plot a site -------------------------------------------------------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+make_site_ts(site_ts=data_full, 
+              y_vars = c("depth", "depth_v1", "depth_v2","Water_press"), 
               qaqc_df = qaqc)
 
 

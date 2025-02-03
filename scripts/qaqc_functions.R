@@ -6,47 +6,14 @@ library(plotly)
 library(glue)
 library(rlang)
 
-make_site_ts <- function(site_ts, y_var, qaqc_df) {
-  # Convert the y_var name to a string internally
-  y_var_sym  <- rlang::ensym(y_var)
-  y_var_name <- rlang::as_string(y_var_sym)
-  
-  site_id <- site_ts %>% 
-    pull(Site) %>% 
-    unique()
-  
-  fig <- site_ts %>%
-    plot_ly(
-      x = ~Date,
-      # Convert the string into a plotly formula, e.g. "~WaterLevel_m"
-      y = as.formula(paste0("~", y_var_name)), 
-      type = "scatter",
-      mode = "lines"
-    ) %>%
-    layout(title = glue("PT Data for Wetland {site_id}"))
-  
-  fig <- fig %>%
-    add_trace(
-      data = qaqc_df,
-      x = ~date,
-      y = ~meter,
-      type = "scatter",
-      mode = "markers",
-      marker = list(color = "red", size = 10),
-      name = "QA/QC"
-    )
-  
-  fig
-}
-
-make_site_ts2 <- function(site_ts, 
+make_site_ts <- function(site_ts, 
                          y_vars, # A vector of y variables to plot
                          qaqc_df = NULL, 
                          trace_names = NULL) {
   
   # Get site ID
   site_id <- site_ts %>% 
-    pull(Site) %>% 
+    pull(Site_ID) %>% 
     unique()
   
   # Initialize plot
