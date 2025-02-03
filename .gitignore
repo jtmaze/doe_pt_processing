@@ -2,3 +2,20 @@
 .Rhistory
 .RData
 .Ruserdata
+
+# History files
+.Rhistory
+.RData
+
+# RStudio files
+.Rproj.user/
+*.Rproj
+
+# Miscellaneous
+.DS_Store
+
+# Data
+./data/
+
+# qgis_file
+.qgz
