@@ -25,10 +25,18 @@ unique_wetland_wells <- read_excel(meta_data_path, sheet="Wetland_and_well_info"
 data_colnames <- colnames(read_excel(compiled_path, sheet=unique_wetland_wells[3]))
 print(data_colnames)
 
+# Example I)
+# One of the offset values is dramatically wrong
+# Time series shits dramatically in November 2023
 
-print(unique_wetland_wells)
+# Example II)
+# Offset appears to have changed gradually over the deployment
+#site <- unique_wetland_wells[2]
 
-site <- unique_wetland_wells[5]
+# Example III)
+# Example where first iteration of offset is better
+site <- unique_wetland_wells[15]
+
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Step 3: Fetch Site Specific Data -------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -60,15 +68,16 @@ drop_cols <- c(
 data_full <- data_full %>% select(-any_of(drop_cols))
 
 data_full <- data_full %>% 
-  mutate(depth_v1 = Water_press - offset_m_1,
-         depth_v2 = Water_press - offset_m_2)
+  mutate(depth_v1 = sensor_depth - offset_m_1,
+         depth_v2 = sensor_depth - offset_m_2,
+         depth_v3 = sensor_depth - offset_m_3)
 
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Step 4: Plot a site -------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 make_site_ts(site_ts=data_full, 
-              y_vars = c("depth", "depth_v1", "depth_v2","Water_press"), 
+              y_vars = c("depth","depth_v1", "depth_v2","depth_v3"), 
               qaqc_df = qaqc)
 
 
