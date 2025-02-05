@@ -22,9 +22,6 @@ unique_wetland_wells <- read_excel(meta_data_path, sheet="Wetland_and_well_info"
   pull('Site_ID') %>% 
   unique()
 
-data_colnames <- colnames(read_excel(compiled_path, sheet=unique_wetland_wells[3]))
-print(data_colnames)
-
 # Example I)
 # One of the offset values is dramatically wrong
 # Time series shits dramatically in November 2023
@@ -35,15 +32,27 @@ print(data_colnames)
 
 # Example III)
 # Example where first iteration of offset is better
-site <- unique_wetland_wells[15]
+#site <- unique_wetland_wells[15]
+
+# Example IV) 
+# Show cases how/why the choice of offset is so impactfull
+# November 2023 download causes big jump in the original data, becuase 
+# the offset changed, but did it really??
+#site <- unique_wetland_wells[12]
+
+# Example V)
+site <- unique_wetland_wells[49]
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Step 3: Fetch Site Specific Data -------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 data <- site_ts_from_xlsx_sheet(compiled_path, site)
+
 status <- fetch_post_process_status(status_path, site)
-qaqc <- fetch_water_checks(meta_data_path, site) 
+qaqc <- fetch_water_checks(meta_data_path, site) %>% 
+  filter(meter != 0)
+# !! cut zeros from QAQC
 pivot_hist <- fetch_pivot_history(meta_data_path, site)
 
 # Merge the pivot history with the site data
@@ -55,7 +64,7 @@ data_full <- merge(data_full,
                    all=TRUE)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# Step 4: Apply different offsets -------------------------------------------------------
+# Step 4: Calculate water levels based on various offsets -------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 drop_cols <- c(
@@ -68,16 +77,51 @@ drop_cols <- c(
 data_full <- data_full %>% select(-any_of(drop_cols))
 
 data_full <- data_full %>% 
+  mutate(offset_mean = rowMeans(cbind(offset_m_1, offset_m_2, offset_m_3))) %>% 
   mutate(depth_v1 = sensor_depth - offset_m_1,
          depth_v2 = sensor_depth - offset_m_2,
-         depth_v3 = sensor_depth - offset_m_3)
+         depth_v3 = sensor_depth - offset_m_3,
+         depth_avg = sensor_depth - offset_mean)
+
+
+
 
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Step 4: Plot a site -------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 make_site_ts(site_ts=data_full, 
-              y_vars = c("depth","depth_v1", "depth_v2","depth_v3"), 
+              y_vars = c("depth","depth_v1", "depth_v2","depth_v3", "depth_avg"), 
               qaqc_df = qaqc)
+
+checks_orig <- calculate_chk_ts_diffs(data_full, qaqc, "depth")
+checks1 <- calculate_chk_ts_diffs(data_full, qaqc, "depth_v1")
+checks2 <- calculate_chk_ts_diffs(data_full, qaqc, "depth_v2")
+checks3 <- calculate_chk_ts_diffs(data_full, qaqc, "depth_v3")
+checks_avg <- calculate_chk_ts_diffs(data_full, qaqc, "depth_avg")
+
+checks <- bind_rows(checks_orig, checks1, checks2, checks3, checks_avg)
+
+p <- ggplot(data=checks,
+            mapping=aes(x=factor(version), y=diff)) +
+  geom_point(aes(color = date),  
+             size = 5, 
+             stroke = 2) +
+  stat_summary(fun=mean, geom="point", shape=4, size=5, stroke=3, color="red") +
+  scale_color_gradient(low='green', high="purple") +
+  geom_hline(yintercept=0, color="tomato", linewidth=2) +
+  theme_bw() + 
+  labs(title = paste0("Checking Site: ", site),
+       y = "Field - Logger Water Level (m)",
+       x = "Dataset Version",
+       color = "Date")
+
+print(p)
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Step 5: Appl
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
 
 
