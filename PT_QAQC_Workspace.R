@@ -7,6 +7,7 @@ library('plotly')
 library('glue')
 library('readxl')
 
+
 source("./scripts/qaqc_functions.R")
 source("./scripts/data_read_functions.R")
 
@@ -41,7 +42,10 @@ unique_wetland_wells <- read_excel(meta_data_path, sheet="Wetland_and_well_info"
 #site <- unique_wetland_wells[12]
 
 # Example V)
-site <- unique_wetland_wells[49]
+site <- unique_wetland_wells[47]
+
+site <- "15_409" # One of AJ's sites with high error!
+
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Step 3: Fetch Site Specific Data -------------------------------------------------------
@@ -51,8 +55,8 @@ data <- site_ts_from_xlsx_sheet(compiled_path, site)
 
 status <- fetch_post_process_status(status_path, site)
 qaqc <- fetch_water_checks(meta_data_path, site) %>% 
-  filter(meter != 0)
-# !! cut zeros from QAQC
+  filter(meter != 0) # !! cut zeros from QAQC, many of them are not real
+
 pivot_hist <- fetch_pivot_history(meta_data_path, site)
 
 # Merge the pivot history with the site data
@@ -91,7 +95,7 @@ data_full <- data_full %>%
 # Step 4: Plot a site -------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 make_site_ts(site_ts=data_full, 
-              y_vars = c("depth","depth_v1", "depth_v2","depth_v3", "depth_avg"), 
+              y_vars = c("depth_v1", "depth_v2", "depth_v3"), 
               qaqc_df = qaqc)
 
 checks_orig <- calculate_chk_ts_diffs(data_full, qaqc, "depth")
@@ -102,24 +106,10 @@ checks_avg <- calculate_chk_ts_diffs(data_full, qaqc, "depth_avg")
 
 checks <- bind_rows(checks_orig, checks1, checks2, checks3, checks_avg)
 
-p <- ggplot(data=checks,
-            mapping=aes(x=factor(version), y=diff)) +
-  geom_point(aes(color = date),  
-             size = 5, 
-             stroke = 2) +
-  stat_summary(fun=mean, geom="point", shape=4, size=5, stroke=3, color="red") +
-  scale_color_gradient(low='green', high="purple") +
-  geom_hline(yintercept=0, color="tomato", linewidth=2) +
-  theme_bw() + 
-  labs(title = paste0("Checking Site: ", site),
-       y = "Field - Logger Water Level (m)",
-       x = "Dataset Version",
-       color = "Date")
-
-print(p)
+plot_checks(checks)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# Step 5: Appl
+# Step 5: Apply the correct offset version
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 

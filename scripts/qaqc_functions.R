@@ -104,4 +104,23 @@ calculate_chk_ts_diffs <- function(ts, qaqc_df, version){
   return(df)
 }
 
+plot_checks <- function(checks_df){
+# Makes a dot plot of the checks dataframe
+  p <- ggplot(data=checks,
+              mapping=aes(x=factor(version), y=diff)) +
+    geom_point(aes(color = date),  
+               size = 5, 
+               stroke = 2) +
+    stat_summary(fun=mean, geom="point", shape=4, size=5, stroke=3, color="red") +
+    scale_color_gradient(low='green', high="purple") +
+    geom_hline(yintercept=0, color="tomato", linewidth=2) +
+    theme_bw() + 
+    labs(title = paste0("Checking Site: ", site),
+         y = "Field - Logger Water Level (m)",
+         x = "Dataset Version",
+         color = "Date")
+  
+  print(p)
+}
+
 #make_multiple_sites_ts <- function()
