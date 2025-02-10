@@ -6,6 +6,29 @@ library(plotly)
 library(glue)
 library(rlang)
 
+calc_stages_from_offsets <- function(ts_data, pivot_history){
+  
+  data_full <- merge(ts_data, pivot_history, by="Site_ID", all=TRUE) %>% 
+    # P to G and P to L columns are redundant, bc offsets are calculated. 
+    select(
+      -matches("^P_[LG]_cm_")
+    ) %>% 
+    # 2) For each offset_m_N, create depth_vN = sensor_depth - offset_m_N
+    mutate(
+      across(
+        matches("^offset_m_(\\d+)$"), 
+        ~ sensor_depth - .,
+        .names = "depth_v{gsub('offset_m_', '', .col)}"
+      )
+    ) %>% 
+    # 3) Calculate the average offset across all offset_m_N columns
+    mutate(
+      offset_avg = rowMeans(across(matches("^offset_m_(\\d+)$")), na.rm = TRUE),
+      depth_avg  = sensor_depth - offset_avg
+    )
+  return(data_full)
+}
+
 make_site_ts <- function(site_ts, 
                          y_vars, # A vector of y variables to plot
                          qaqc_df = NULL, 
@@ -104,6 +127,22 @@ calculate_chk_ts_diffs <- function(ts, qaqc_df, version){
   return(df)
 }
 
+make_checks_df <- function(data_full, qaqc){
+  
+  all_cols <- colnames(data_full)
+  v_cols <- grep("depth_v", all_cols, value=TRUE)
+  check_cols <- c(v_cols, "original_depth", "depth_avg")
+
+  checks_list <- vector("list", length(check_cols))
+  for(i in seq_along(check_cols)){
+    check <- calculate_chk_ts_diffs(data_full, qaqc, check_cols[i])
+    checks_list[[i]] <- check
+  }
+  
+  checks <- bind_rows(checks_list)
+  return(checks)
+}
+
 plot_checks <- function(checks_df){
 # Makes a dot plot of the checks dataframe
   p <- ggplot(data=checks,
@@ -123,4 +162,41 @@ plot_checks <- function(checks_df){
   print(p)
 }
 
+quick_plot_offset <- function(offsets_to_use){
+  # Convert the one-row wide data into a long format
+  offsets_long <- offsets_to_use %>%
+    pivot_longer(cols = everything(), 
+                 names_to = "offset_name", 
+                 values_to = "offset_value")
+  
+  # Calculate the mean of all offsets
+  offsets_mean <- data.frame(
+    offset_name = "Mean",
+    offset_value = mean(offsets_long$offset_value, na.rm = TRUE)
+  )
+  
+  # Create a simple plot
+  p <- ggplot(offsets_long, aes(x = offset_name, y = offset_value)) +
+    # Larger points for individual offsets
+    geom_point(size = 7) +
+    # Large red X for the mean offset
+    geom_point(
+      data = offsets_mean,
+      aes(x = offset_name, y = offset_value),
+      color = "red", 
+      shape = 4,   # shape=4 is an 'X'
+      size = 6,
+      stroke = 2.5
+    ) +
+    labs(
+      x = "Offset Type",
+      y = "Offset (m)",
+      title = "Quick Plot of Offsets"
+    ) +
+    theme_minimal() +
+    # Ensure "Mean" appears as a discrete category on the x-axis after the others
+    scale_x_discrete(limits = c(unique(offsets_long$offset_name), "Mean"))
+  
+  print(p)
+}
 #make_multiple_sites_ts <- function()

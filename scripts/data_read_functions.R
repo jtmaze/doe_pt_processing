@@ -9,8 +9,9 @@ library(rlang)
 site_ts_from_xlsx_sheet <- function(compiled_path, site_id) {
   
   data <- read_excel(compiled_path, sheet=site_id) %>% 
-    select(c('Date', 'Site', 'depth', 'Water_press', 'sensor_depth')) %>% 
-    rename(Site_ID = Site)
+    select(c('Date', 'Site', 'depth', 'sensor_depth')) %>% 
+    rename(original_depth = depth,
+           Site_ID = Site)
   
   return(data)
   
@@ -63,8 +64,11 @@ fetch_water_checks <- function(meta_path, site_id){
     )
   
   check_history_long <- check_history_long %>% 
-    mutate('meter' = cm / 100)
-  
+    mutate('meter' = cm / 100) %>% 
+    # !!!! NOTE: cut zeros from QAQC, many of them are not real.
+    # Indicates water level below ground, but no well-sounder on date
+    filter(meter != 0) 
+
   return(check_history_long)
 }
 
@@ -94,7 +98,8 @@ fetch_post_process_status <- function(path, site_id){
     # Reading all columns as "text", because of excel's wonky auto formatting. 
     # Dates were listed as integers. 
     filter(Wetland == site_id) %>% 
-    rename(Site_ID = Wetland)
+    rename(Site_ID = Wetland) %>% 
+    select(c(Site_ID, Notes))
   
   return(status)
 }
