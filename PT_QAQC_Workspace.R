@@ -1,7 +1,6 @@
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Libraries & File Paths -------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
 library('tidyverse')
 library('plotly')
 library('glue')
@@ -64,22 +63,29 @@ make_site_ts(site_ts=data_full,
              qaqc_df = qaqc)
 
 checks <- make_checks_df(data_full, qaqc)
-plot_checks(checks)
+plot_checks(checks, site)
 
 all_offset_names <- grep("offset_m_", all_cols, value=TRUE)
+all_offset_dates <- grep("P_G/L_date_", all_cols, value=TRUE)
+all_offset_cols <- c(all_offset_dates, all_offset_names)
 all_offsets <- pivot_history %>% 
-  select(all_of(all_offset_names))
+  select(all_of(all_offset_cols))
 
-quick_plot_offset(all_offsets)
+quick_plot_offset2(all_offsets)
 
 ## ------- C Revise water depth -----------------------------------------
 
 offset_names_to_use <- all_offset_names[all_offset_names != "offset_m_1"]
+offset_dates_to_use <- all_offset_dates[all_offset_dates != "P_G/L_date_1"]
+offset_cols_to_use <- c(offset_names_to_use, offset_dates_to_use)
 offsets_to_use <- pivot_history %>% 
-  select(all_of(offset_names_to_use))
-quick_plot_offset(offsets_to_use)
+  select(all_of(offset_cols_to_use))
+quick_plot_offset2(offsets_to_use)
 
-new_offset <- offsets_to_use %>% unlist() %>% mean(na.rm = TRUE)
+offsets_to_use <- offsets_to_use %>% 
+  select(all_of(offset_names_to_use))
+
+new_offset <- offsets_to_use %>%  unlist() %>% mean(na.rm = TRUE)
 
 data_full <- data_full %>% 
   mutate(offset_vF = new_offset,
@@ -92,15 +98,24 @@ make_site_ts(site_ts=data_full,
              qaqc)
 
 data_out <- data_full %>% 
-  select(c('Site_ID', 'Date', 'original_depth', 'depth_avg', 'depth_vF', 'offset_vF'))
+  select(c('Site_ID', 'Date', 'sensor_depth', 'original_depth', 'depth_avg', 'depth_vF', 'offset_vF'))
 
-new <- make_checks_df(data_out, qaqc)
-plot_checks(new)
+plot_checks(make_checks_df(data_out, qaqc), site)
+
 
 data_out <- data_out %>% 
-  mutate("flag"= 0)
-  
-rm(site, data, qaqc, pivot_history, status, data_full) 
+  select(-c('depth_avg', 'offset_vF')) %>% 
+  rename(revised_depth = depth_vF) %>% 
+  mutate(offset_version = "offset_vF") %>% 
+  mutate(flag = 0,
+         notes = "Dropped the first offset, used offset v2, v3, v4")
+
+output_data <- bind_rows(output_data, data_out)  
+
+rm(site, data, qaqc, pivot_history, status, data_full, offsets_to_use) 
+rm(all_cols, all_offset_cols, all_offset_dates, all_offset_names, depth_cols)
+rm(new_offset, not_to_plot, site)
+rm(offset_cols_to_use, offset_dates_to_use, offset_names_to_use)
 
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -146,15 +161,7 @@ rm(site, data, qaqc, pivot_history, status, data_full)
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 
-checks_orig <- calculate_chk_ts_diffs(data_full, qaqc, "depth")
-checks1 <- calculate_chk_ts_diffs(data_full, qaqc, "depth_v1")
-checks2 <- calculate_chk_ts_diffs(data_full, qaqc, "depth_v2")
-checks3 <- calculate_chk_ts_diffs(data_full, qaqc, "depth_v3")
-checks_avg <- calculate_chk_ts_diffs(data_full, qaqc, "depth_avg")
 
-checks <- bind_rows(checks_orig, checks1, checks2, checks3, checks_avg)
-
-plot_checks(checks)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Step 5: Apply the correct offset version

@@ -143,9 +143,9 @@ make_checks_df <- function(data_full, qaqc){
   return(checks)
 }
 
-plot_checks <- function(checks_df){
+plot_checks <- function(checks_df, site){
 # Makes a dot plot of the checks dataframe
-  p <- ggplot(data=checks,
+  p <- ggplot(data=checks_df,
               mapping=aes(x=factor(version), y=diff)) +
     geom_point(aes(color = date),  
                size = 5, 
@@ -199,4 +199,72 @@ quick_plot_offset <- function(offsets_to_use){
   
   print(p)
 }
-#make_multiple_sites_ts <- function()
+
+quick_plot_offset2 <- function(offsets_to_use){
+  
+  # 1) Identify all columns for dates and offsets based on a common pattern
+  date_cols   <- grep("^P_G/L_date_[0-9]+$", names(offsets_to_use), value = TRUE)
+  offset_cols <- grep("^offset_m_[0-9]+$",   names(offsets_to_use), value = TRUE)
+  
+  # 2) Pivot offset columns to long format
+  offsets_long <- offsets_to_use %>%
+    select(all_of(offset_cols)) %>%
+    pivot_longer(
+      cols = everything(),
+      names_to = "offset_id",
+      names_pattern = "^offset_m_(.*)$",   # capture the trailing number
+      values_to = "offset_value"
+    )
+  
+  # 3) Pivot date columns to long format
+  dates_long <- offsets_to_use %>%
+    select(all_of(date_cols)) %>%
+    pivot_longer(
+      cols = everything(),
+      names_to = "date_id",
+      names_pattern = "^P_G/L_date_(.*)$", # capture the trailing number
+      values_to = "date_value"
+    )
+  
+  # 4) Join offsets and dates on their shared index (the trailing number in the names)
+  combined <- left_join(
+    offsets_long,
+    dates_long,
+    by = c("offset_id" = "date_id")
+  )
+  
+  # 5) Calculate the mean offset (ignoring dates). 
+  #    We'll give it a special 'offset_id' called "Mean" for plotting on the same axis.
+  offsets_mean <- data.frame(
+    offset_id   = "Mean",
+    offset_value = mean(combined$offset_value, na.rm = TRUE),
+    date_value   = NA  # No date for the mean point
+  )
+  
+  # 6) Create the plot
+  p <- ggplot(combined, 
+              aes(x = offset_id, y = offset_value, color = factor(date_value))) +
+    geom_point(size = 7) +
+    # Large red X for the mean offset (turn off inherit.aes so it doesn't try to use color = factor(NA))
+    geom_point(
+      data = offsets_mean,
+      aes(x = offset_id, y = offset_value),
+      color = "red", 
+      shape = 4,   # shape=4 is an 'X'
+      size = 6,
+      stroke = 2.5,
+      inherit.aes = FALSE
+    ) +
+    labs(
+      x = "Offset Index",
+      y = "Offset (m)",
+      color = "Date",
+      title = "Quick Plot of Offsets Colored by Date"
+    ) +
+    theme_minimal() +
+    # Ensure "Mean" appears on the x-axis after all numeric indices
+    scale_x_discrete(limits = c(unique(combined$offset_id), "Mean"))
+  
+  print(p)
+}
+
