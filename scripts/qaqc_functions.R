@@ -132,6 +132,10 @@ make_checks_df <- function(data_full, qaqc){
   all_cols <- colnames(data_full)
   v_cols <- grep("depth_v", all_cols, value=TRUE)
   check_cols <- c(v_cols, "original_depth", "depth_avg")
+  
+  if ("revised_depth" %in% all_cols) {
+    check_cols <- c(check_cols, "revised_depth")
+  }
 
   checks_list <- vector("list", length(check_cols))
   for(i in seq_along(check_cols)){
