@@ -37,6 +37,15 @@ output_data <- tibble(
   notes = character()
 )
 
+output_checks <- tibble(
+  version = character(),
+  date = as.POSIXct(character()),
+  diff = numeric(),
+  field_check_m = numeric(),
+  logger_val_m = numeric(),
+  Site_ID = character()
+)
+
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # I) Site: 13_263 -------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -142,15 +151,25 @@ data_out <- data_full %>%
       )
   )
 
-plot_checks(make_checks_df(data_out, qaqc), site)
+checks_final <- make_checks_df(data_out, qaqc)
+plot_checks(checks_final, site)
 
 ## ------------ E Join Output clean up environment ------------------
 
+# Add timeseries to output
 data_out <- data_out %>% 
   select(-c('depth_avg')) 
 output_data <- bind_rows(output_data, data_out)  
 
-rm(site, data, qaqc, pivot_history, status, data_full, data_out) 
+# Add checks to output
+checks_final <- checks_final %>%
+  mutate("Site_ID" = site) %>% 
+  rename(field_check_m = chk_m,
+         logger_val_m = logger_date_mean_trimmed)
+output_checks <- bind_rows(output_checks, checks_final)
+
+rm(site, data, qaqc, pivot_history, 
+   status, data_full, data_out, checks_final) 
 
 rm(offsets_to_use1, offsets_to_use2, new_offset1, new_offset2,
    offset_cols_to_use1, offset_cols_to_use2, offset_dates_to_use1,
@@ -237,15 +256,25 @@ data_out <- data_full %>%
     )
   )
 
-plot_checks(make_checks_df(data_out, qaqc), site)
+checks_final <- make_checks_df(data_out, qaqc)
+plot_checks(checks_final, site)
 
 ## ------------ E Join Output clean up environment ------------------
 
+# Add timeseries to output
 data_out <- data_out %>% 
   select(-c('depth_avg')) 
 output_data <- bind_rows(output_data, data_out)  
 
-rm(site, data, qaqc, pivot_history, status, data_full, data_out) 
+# Add checks to output
+checks_final <- checks_final %>%
+  mutate("Site_ID" = site) %>% 
+  rename(field_check_m = chk_m,
+         logger_val_m = logger_date_mean_trimmed)
+output_checks <- bind_rows(output_checks, checks_final)
+
+rm(site, data, qaqc, pivot_history, status, 
+   checks_final, data_full, data_out) 
 rm(offsets_to_use, new_offset, offset_cols_to_use, 
    offset_dates_to_use, offset_names_to_use, offset_vals_use)
 rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
@@ -328,15 +357,26 @@ data_out <- data_full %>%
     )
   )
 
-plot_checks(make_checks_df(data_out, qaqc), site)
+
+checks_final <- make_checks_df(data_out, qaqc)
+plot_checks(checks_final, site)
 
 ## ------------ E Join Output clean up environment ------------------
 
+# Add timeseries to output
 data_out <- data_out %>% 
   select(-c('depth_avg')) 
 output_data <- bind_rows(output_data, data_out)  
 
-rm(site, data, qaqc, pivot_history, status, data_full, data_out) 
+# Add checks to output
+checks_final <- checks_final %>%
+  mutate("Site_ID" = site) %>% 
+  rename(field_check_m = chk_m,
+         logger_val_m = logger_date_mean_trimmed)
+output_checks <- bind_rows(output_checks, checks_final)
+
+rm(site, data, qaqc, pivot_history, 
+   status, data_full, data_out, checks_final) 
 rm(offsets_to_use, new_offset, offset_cols_to_use, 
    offset_dates_to_use, offset_names_to_use, offset_vals_use)
 rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
@@ -429,22 +469,33 @@ data_out <- data_full %>%
     )
   )
 
-plot_checks(make_checks_df(data_out, qaqc), site)
+checks_final <- make_checks_df(data_out, qaqc)
+plot_checks(checks_final, site)
 
 ## ------------ E Join Output clean up environment ------------------
 
+# Add timeseries to output
 data_out <- data_out %>% 
   select(-c('depth_avg')) 
 output_data <- bind_rows(output_data, data_out)  
 
-rm(site, data, qaqc, pivot_history, status, data_full, data_out) 
+# Add checks to output
+checks_final <- checks_final %>%
+  mutate("Site_ID" = site) %>% 
+  rename(field_check_m = chk_m,
+         logger_val_m = logger_date_mean_trimmed)
+output_checks <- bind_rows(output_checks, checks_final)
+
+rm(site, data, qaqc, pivot_history, 
+   status, data_full, data_out, checks_final) 
+
 rm(offsets_to_use, new_offset, offset_cols_to_use, 
    offset_dates_to_use, offset_names_to_use, offset_vals_use)
 rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
    all_offset_names, all_offsets, checks, depth_cols)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# V) Site: 13_410 -------------------------------------------------------
+# V) Site: 14/9_168-------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ## -------- A Read the site data/metadata -----------------

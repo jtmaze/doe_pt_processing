@@ -8,13 +8,18 @@ library(rlang)
 # 
 site_ts_from_xlsx_sheet <- function(compiled_path, site_id) {
   
+  # if site_id has a wonky slash "/" in the name, change to "." for matching sheet names
+  if(grepl("/", site_id)){
+    site_id <- gsub("/", ".", site_id)
+  }
+  
   data <- read_excel(compiled_path, sheet=site_id) %>% 
     select(c('Date', 'Site', 'depth', 'sensor_depth')) %>% 
     rename(original_depth = depth,
-           Site_ID = Site)
+           Site_ID = Site) %>% 
+    mutate(Site_ID = gsub("\\.", "/", Site_ID))
   
   return(data)
-  
 }
 
 fetch_water_checks <- function(meta_path, site_id){
@@ -74,6 +79,11 @@ fetch_water_checks <- function(meta_path, site_id){
 
 
 fetch_post_process_status <- function(path, site_id){
+  
+  # if site_id has a wonky slash "/" in the name, change to "." for matching sheet names
+  if(grepl("/", site_id)){
+    site_id <- gsub("/", ".", site_id)
+  }
   
   basin_id <- str_split_1(site_id, pattern="_")[1]
   
