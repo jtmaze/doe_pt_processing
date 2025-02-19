@@ -1,6 +1,10 @@
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Libraries & File Paths -------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+# !!!!!
+
+# !!!! TODO: Implement Anomaly Remover Function
 library('tidyverse')
 library('plotly')
 library('glue')
@@ -55,6 +59,7 @@ output_checks <- tibble(
 # 15_4 Looks like well isn't equilabrating properly??
 # 3_173 The "bottoming out" depth changed, could be and in well instead of well moving.
 # 5_510 This has to be a groundwater well, or something is seriously wrong
+# 6_20 Agreement got worse after revision
 # 9_332 No clue what's happening here. Stitched hydrograph together with made up offset on August 9th 2023
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -3700,8 +3705,8 @@ data_full <- data_full %>%
     offset_version = offset_names_to_use,           
     offset_value   = new_offset,            
     revised_depth  = sensor_depth - offset_value,
-    flag           = 0,                      
-    notes          = NA_character_
+    flag           = 1,                      
+    notes          = "Only one water level measurement to QAQC offset"
   )
 
 ## ------- D Plot the data with a revised offset -----------------------

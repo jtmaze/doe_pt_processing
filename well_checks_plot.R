@@ -7,7 +7,7 @@ library(tidyverse)
 
 df <- read_csv('./data/out_data/well_checks_log.csv')
 
-# ----- Boxplots showing mean agreement
+# ----- Original/Revised Boxplots showing agreement -------
 
 mean_df1 <- df %>% 
   filter(version != "depth_avg") %>% 
@@ -56,6 +56,8 @@ ggplot(mean_df1, aes(x = version, y = mean_diff)) +
     axis.text = element_text(size = 12)
   )
 
+# ------------- Mean/Original/Revised Boxplots -------------
+
 mean_df2 <- df %>% 
   group_by(version, Site_ID) %>% 
   summarise(mean_diff = mean(diff, na.rm=TRUE))
@@ -64,13 +66,13 @@ ggplot(mean_df2, aes(x = version, y = mean_diff)) +
   geom_boxplot() +
   geom_hline(yintercept = 0, color = "blue") +
   labs(
-    title = "Field Measurement Agreement by Dataset Version (trimmed y-axis)",
+    title = "Field Measurement Agreement by Dataset Version",
     x = "Dataset Version",
     y = "Average Sensor - Field Measurement (all dates) in meters"
   ) + 
   theme_bw() +  
   scale_x_discrete(labels = c(
-    "depth_avg" = "Mean all well offset dates",
+    "depth_avg" = "Depth calculated mean all offsets",
     "original_depth" = "Original Dataset", 
     "revised_depth"  = "Revised Dataset"
   )) +
@@ -82,7 +84,7 @@ ggplot(mean_df2, aes(x = version, y = mean_diff)) +
     axis.text = element_text(size = 12)
   )
 
-# --------------- Agreement with unflaggd data ------------------
+# --------------- site-by-site agreement ------------------
 
 timeseries <- read_csv('./data/out_data/waterlevel_offsets_tracked.csv')
 
@@ -108,6 +110,70 @@ ggplot(df_mean_unflagged, aes(x = reorder(Site_ID, mean_diff), y = mean_diff)) +
   ) +
   theme_bw() +
   coord_flip()
+
+df_w_flags <- df %>% 
+  filter(version %in% c("revised_depth", "original_depth")) %>% 
+  group_by(Site_ID) %>% 
+  summarize(mean_diff = mean(diff, na.rm = TRUE)) %>% 
+  arrange(mean_diff)
+
+ggplot(df_w_flags, aes(x = reorder(Site_ID, mean_diff), y = mean_diff)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  labs(
+    title = "Mean Difference All Dates (Logger - Field) by Site_ID",
+    x = "Site_ID",
+    y = "Mean Difference (meters)"
+  ) +
+  theme_bw() +
+  coord_flip()
+
+df_w_flags <- df %>%
+  filter(version %in% c("revised_depth", "original_depth")) %>%
+  group_by(Site_ID, version) %>%
+  summarize(mean_diff = mean(diff, na.rm = TRUE), .groups = "drop")
+
+ggplot(df_w_flags, aes(
+  x = reorder(Site_ID, mean_diff), 
+  y = mean_diff, 
+  fill = version
+)) +
+  geom_bar(stat = "identity", position = position_dodge()) +
+  scale_fill_manual(
+    values = c("revised_depth" = "steelblue", "original_depth" = "maroon")
+  ) +
+  labs(
+    title = "Mean Difference All Dates (Logger - Field) by Site_ID and Version",
+    x = "Site_ID",
+    y = "Mean Difference (meters)"
+  ) +
+  theme_bw() +
+  coord_flip()
+
+# ------ Detailed view at every site's QAQC measurement -------------
+
+df_revised <- df %>% 
+  filter(version == "revised_depth")
+
+ggplot(df_revised, aes(
+  x = diff, 
+  y = reorder(Site_ID, diff, FUN = mean), 
+  color = date
+  )) +
+  geom_point(size=2.5) +
+  theme_bw() +
+  scale_color_gradient(low = "purple", high = "orange") +
+  scale_x_continuous(limits = c(-0.3, 0.6)) +
+  labs(
+    title = "Revised Depth Differences by Site_ID",
+    x = "Diff (Logger - Field)",
+    y = "Site_ID"
+  )
+
+
+
+
+
+
 
 
 
