@@ -47,7 +47,7 @@ output_checks <- tibble(
 )
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# Review with DLM -------------------------------------------------------
+# Review with DLM and Others -------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 # 13_267 # Switched offset when well moved
@@ -55,6 +55,7 @@ output_checks <- tibble(
 # 15_4 Looks like well isn't equilabrating properly??
 # 3_173 The "bottoming out" depth changed, could be and in well instead of well moving.
 # 5_510 This has to be a groundwater well, or something is seriously wrong
+# 9_332 No clue what's happening here. Stitched hydrograph together with made up offset on August 9th 2023
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # I) Site: 13_263 -------------------------------------------------------
@@ -397,8 +398,8 @@ rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ## -------- A Read the site data/metadata -----------------
-site <- "13_274"
-data <- site_ts_from_xlsx_sheet(compiled_path, site)
+# site <- "13_274"
+# data <- site_ts_from_xlsx_sheet(compiled_path, site)
 
 # --------!!!!! Site 13_274 missing from excel data ---------------------
 
@@ -3034,12 +3035,9 @@ rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ## -------- A Read the site data/metadata -----------------
-site <- "5_546"
-data <- site_ts_from_xlsx_sheet(compiled_path, site)
-qaqc <- fetch_water_checks(meta_data_path, site) 
-pivot_history <- fetch_pivot_history(meta_data_path, site)
-status <- fetch_post_process_status(status_path, site)
-print(status$Notes)
+# site <- "5_546"
+# data <- site_ts_from_xlsx_sheet(compiled_path, site)
+
 
 # ----- !!!! Site 5_546 not in compiled wetland stage 2 !!! ----------
 
@@ -3445,10 +3443,1646 @@ rm(offsets_to_use, new_offset, offset_cols_to_use,
 rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
    all_offset_names, all_offsets, checks, depth_cols)
 
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# XXXIV) Site: 5a_582 -------------------------------------------------------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+## -------- A Read the site data/metadata -----------------
+site <- "5a_582"
+data <- site_ts_from_xlsx_sheet(compiled_path, site)
+qaqc <- fetch_water_checks(meta_data_path, site) 
+pivot_history <- fetch_pivot_history(meta_data_path, site)
+status <- fetch_post_process_status(status_path, site)
+print(status$Notes)
+
+## ------ B Explore depth versions -------------------------
+data_full <- calc_stages_from_offsets(data, pivot_history)
+# Select columns to plot
+all_cols <- colnames(data_full)
+depth_cols <- grep('depth', all_cols, value=TRUE)
+not_to_plot <- c("sensor_depth")
+ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+print(ts_cols)
+
+# Make plots
+make_site_ts(site_ts=data_full, 
+             y_vars = ts_cols, 
+             qaqc_df = qaqc)
+# Plot checks
+checks <- make_checks_df(data_full, qaqc)
+plot_checks(checks, site)
+# Plot offsets
+all_offset_names <- grep("offset_m_", all_cols, value=TRUE)
+all_offset_dates <- grep("P_G/L_date_", all_cols, value=TRUE)
+all_offset_cols <- c(all_offset_dates, all_offset_names)
+all_offsets <- pivot_history %>% 
+  select(all_of(all_offset_cols))
+quick_plot_offset2(all_offsets)
+
+## ------- C Revise water depth -----------------------------------------
+
+print(all_offsets)
+
+# PICK OFFSET HERE
+### !!!!!!! offset V1 !!!!!!!!!!!!!!!!!
+offset_names_to_use <- all_offset_names[all_offset_names == "offset_m_1"]
+offset_dates_to_use <- all_offset_dates[all_offset_dates == "P_G/L_date_1"]
+offset_cols_to_use  <- c(offset_names_to_use, offset_dates_to_use)
+
+offsets_to_use <- pivot_history %>% 
+  select(all_of(offset_cols_to_use))
+offset_vals_use <- offsets_to_use %>% select(all_of(offset_names_to_use))
+new_offset <- offset_vals_use %>% unlist() %>% mean(na.rm=TRUE)
+
+# Apply the chosen offset to the entire timeseries
+data_full <- data_full %>%
+  mutate(
+    offset_version = offset_names_to_use,           
+    offset_value   = new_offset,            
+    revised_depth  = sensor_depth - offset_value,
+    flag           = 0,                      
+    notes          = NA_character_
+  )
+
+## ------- D Plot the data with a revised offset -----------------------
+
+make_site_ts(site_ts=data_full,
+             y_vars=c("original_depth", "revised_depth"),
+             qaqc)
+
+data_out <- data_full %>% 
+  select(
+    c(
+      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
+      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+    )
+  )
+
+checks_final <- make_checks_df(data_out, qaqc)
+plot_checks(checks_final, site)
+
+## ------------ E Join Output clean up environment ------------------
+
+# Add timeseries to output
+data_out <- data_out %>% 
+  select(-c('depth_avg')) 
+output_data <- bind_rows(output_data, data_out)  
+
+# Add checks to output
+checks_final <- checks_final %>%
+  mutate("Site_ID" = site) %>% 
+  rename(field_check_m = chk_m,
+         logger_val_m = logger_date_mean_trimmed)
+output_checks <- bind_rows(output_checks, checks_final)
+
+rm(site, data, qaqc, pivot_history, 
+   status, data_full, data_out, checks_final) 
+
+rm(offsets_to_use, new_offset, offset_cols_to_use, 
+   offset_dates_to_use, offset_names_to_use, offset_vals_use)
+rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
+   all_offset_names, all_offsets, checks, depth_cols)
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# XXXV) Site: 5a_598 -------------------------------------------------------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+## -------- A Read the site data/metadata -----------------
+site <- "5a_598"
+data <- site_ts_from_xlsx_sheet(compiled_path, site)
+qaqc <- fetch_water_checks(meta_data_path, site) 
+pivot_history <- fetch_pivot_history(meta_data_path, site)
+status <- fetch_post_process_status(status_path, site)
+print(status$Notes)
+
+## ------ B Explore depth versions -------------------------
+data_full <- calc_stages_from_offsets(data, pivot_history)
+# Select columns to plot
+all_cols <- colnames(data_full)
+depth_cols <- grep('depth', all_cols, value=TRUE)
+not_to_plot <- c("sensor_depth")
+ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+print(ts_cols)
+
+# Make plots
+make_site_ts(site_ts=data_full, 
+             y_vars = ts_cols, 
+             qaqc_df = qaqc)
+# Plot checks
+checks <- make_checks_df(data_full, qaqc)
+plot_checks(checks, site)
+# Plot offsets
+all_offset_names <- grep("offset_m_", all_cols, value=TRUE)
+all_offset_dates <- grep("P_G/L_date_", all_cols, value=TRUE)
+all_offset_cols <- c(all_offset_dates, all_offset_names)
+all_offsets <- pivot_history %>% 
+  select(all_of(all_offset_cols))
+quick_plot_offset2(all_offsets)
+
+## ------- C Revise water depth -----------------------------------------
+
+print(all_offsets)
+
+# PICK OFFSET HERE
+### !!!!!!! offset V1 !!!!!!!!!!!!!!!!!
+offset_names_to_use <- all_offset_names[all_offset_names == "offset_m_1"]
+offset_dates_to_use <- all_offset_dates[all_offset_dates == "P_G/L_date_1"]
+offset_cols_to_use  <- c(offset_names_to_use, offset_dates_to_use)
+
+offsets_to_use <- pivot_history %>% 
+  select(all_of(offset_cols_to_use))
+offset_vals_use <- offsets_to_use %>% select(all_of(offset_names_to_use))
+new_offset <- offset_vals_use %>% unlist() %>% mean(na.rm=TRUE)
+
+# Apply the chosen offset to the entire timeseries
+data_full <- data_full %>%
+  mutate(
+    offset_version = offset_names_to_use,           
+    offset_value   = new_offset,            
+    revised_depth  = sensor_depth - offset_value,
+    flag           = 0,                      
+    notes          = NA_character_
+  )
+
+## ------- D Plot the data with a revised offset -----------------------
+
+make_site_ts(site_ts=data_full,
+             y_vars=c("original_depth", "revised_depth"),
+             qaqc)
+
+data_out <- data_full %>% 
+  select(
+    c(
+      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
+      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+    )
+  )
+
+checks_final <- make_checks_df(data_out, qaqc)
+plot_checks(checks_final, site)
+
+## ------------ E Join Output clean up environment ------------------
+
+# Add timeseries to output
+data_out <- data_out %>% 
+  select(-c('depth_avg')) 
+output_data <- bind_rows(output_data, data_out)  
+
+# Add checks to output
+checks_final <- checks_final %>%
+  mutate("Site_ID" = site) %>% 
+  rename(field_check_m = chk_m,
+         logger_val_m = logger_date_mean_trimmed)
+output_checks <- bind_rows(output_checks, checks_final)
+
+rm(site, data, qaqc, pivot_history, 
+   status, data_full, data_out, checks_final) 
+
+rm(offsets_to_use, new_offset, offset_cols_to_use, 
+   offset_dates_to_use, offset_names_to_use, offset_vals_use)
+rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
+   all_offset_names, all_offsets, checks, depth_cols)
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# XXXVI) Site: 6_20-------------------------------------------------------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+## -------- A Read the site data/metadata -----------------
+site <- "6_20"
+data <- site_ts_from_xlsx_sheet(compiled_path, site)
+qaqc <- fetch_water_checks(meta_data_path, site) 
+pivot_history <- fetch_pivot_history(meta_data_path, site)
+status <- fetch_post_process_status(status_path, site)
+print(status$Notes)
+
+## ------ B Explore depth versions -------------------------
+data_full <- calc_stages_from_offsets(data, pivot_history)
+# Select columns to plot
+all_cols <- colnames(data_full)
+depth_cols <- grep('depth', all_cols, value=TRUE)
+not_to_plot <- c("sensor_depth")
+ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+print(ts_cols)
+
+# Make plots
+make_site_ts(site_ts=data_full, 
+             y_vars = ts_cols, 
+             qaqc_df = qaqc)
+# Plot checks
+checks <- make_checks_df(data_full, qaqc)
+plot_checks(checks, site)
+# Plot offsets
+all_offset_names <- grep("offset_m_", all_cols, value=TRUE)
+all_offset_dates <- grep("P_G/L_date_", all_cols, value=TRUE)
+all_offset_cols <- c(all_offset_dates, all_offset_names)
+all_offsets <- pivot_history %>% 
+  select(all_of(all_offset_cols))
+quick_plot_offset2(all_offsets)
+
+## ------- C Revise water depth -----------------------------------------
+
+print(all_offsets)
+
+# PICK OFFSET HERE
+### !!!!!!! offset V1 !!!!!!!!!!!!!!!!!
+offset_names_to_use <- all_offset_names[all_offset_names == "offset_m_1"]
+offset_dates_to_use <- all_offset_dates[all_offset_dates == "P_G/L_date_1"]
+offset_cols_to_use  <- c(offset_names_to_use, offset_dates_to_use)
+
+offsets_to_use <- pivot_history %>% 
+  select(all_of(offset_cols_to_use))
+offset_vals_use <- offsets_to_use %>% select(all_of(offset_names_to_use))
+new_offset <- offset_vals_use %>% unlist() %>% mean(na.rm=TRUE)
+
+# Apply the chosen offset to the entire timeseries
+data_full <- data_full %>%
+  mutate(
+    offset_version = offset_names_to_use,           
+    offset_value   = new_offset,            
+    revised_depth  = sensor_depth - offset_value,
+    flag           = 0,                      
+    notes          = NA_character_
+  )
+
+## ------- D Plot the data with a revised offset -----------------------
+
+make_site_ts(site_ts=data_full,
+             y_vars=c("original_depth", "revised_depth"),
+             qaqc)
+
+data_out <- data_full %>% 
+  select(
+    c(
+      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
+      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+    )
+  )
+
+checks_final <- make_checks_df(data_out, qaqc)
+plot_checks(checks_final, site)
+
+## ------------ E Join Output clean up environment ------------------
+
+# Add timeseries to output
+data_out <- data_out %>% 
+  select(-c('depth_avg')) 
+output_data <- bind_rows(output_data, data_out)  
+
+# Add checks to output
+checks_final <- checks_final %>%
+  mutate("Site_ID" = site) %>% 
+  rename(field_check_m = chk_m,
+         logger_val_m = logger_date_mean_trimmed)
+output_checks <- bind_rows(output_checks, checks_final)
+
+rm(site, data, qaqc, pivot_history, 
+   status, data_full, data_out, checks_final) 
+
+rm(offsets_to_use, new_offset, offset_cols_to_use, 
+   offset_dates_to_use, offset_names_to_use, offset_vals_use)
+rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
+   all_offset_names, all_offsets, checks, depth_cols)
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# XXXVII) Site: 6_300-------------------------------------------------------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+## -------- A Read the site data/metadata -----------------
+site <- "6_300"
+data <- site_ts_from_xlsx_sheet(compiled_path, site)
+qaqc <- fetch_water_checks(meta_data_path, site) 
+pivot_history <- fetch_pivot_history(meta_data_path, site)
+status <- fetch_post_process_status(status_path, site)
+print(status$Notes)
+
+## ------ B Explore depth versions -------------------------
+data_full <- calc_stages_from_offsets(data, pivot_history)
+# Select columns to plot
+all_cols <- colnames(data_full)
+depth_cols <- grep('depth', all_cols, value=TRUE)
+not_to_plot <- c("sensor_depth")
+ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+print(ts_cols)
+
+# Make plots
+make_site_ts(site_ts=data_full, 
+             y_vars = ts_cols, 
+             qaqc_df = qaqc)
+# Plot checks
+checks <- make_checks_df(data_full, qaqc)
+plot_checks(checks, site)
+# Plot offsets
+all_offset_names <- grep("offset_m_", all_cols, value=TRUE)
+all_offset_dates <- grep("P_G/L_date_", all_cols, value=TRUE)
+all_offset_cols <- c(all_offset_dates, all_offset_names)
+all_offsets <- pivot_history %>% 
+  select(all_of(all_offset_cols))
+quick_plot_offset2(all_offsets)
+
+## ------- C Revise water depth -----------------------------------------
+
+print(all_offsets)
+
+# PICK OFFSET HERE
+### !!!!!!! offset V1 !!!!!!!!!!!!!!!!!
+offset_names_to_use <- all_offset_names[all_offset_names == "offset_m_1"]
+offset_dates_to_use <- all_offset_dates[all_offset_dates == "P_G/L_date_1"]
+offset_cols_to_use  <- c(offset_names_to_use, offset_dates_to_use)
+
+offsets_to_use <- pivot_history %>% 
+  select(all_of(offset_cols_to_use))
+offset_vals_use <- offsets_to_use %>% select(all_of(offset_names_to_use))
+new_offset <- offset_vals_use %>% unlist() %>% mean(na.rm=TRUE)
+
+# Apply the chosen offset to the entire timeseries
+data_full <- data_full %>%
+  mutate(
+    offset_version = offset_names_to_use,           
+    offset_value   = new_offset,            
+    revised_depth  = sensor_depth - offset_value,
+    flag           = 1,                      
+    notes          = "High offset uncertianity used V1, which was in the middle."
+  )
+
+## ------- D Plot the data with a revised offset -----------------------
+
+make_site_ts(site_ts=data_full,
+             y_vars=c("original_depth", "revised_depth"),
+             qaqc)
+
+data_out <- data_full %>% 
+  select(
+    c(
+      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
+      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+    )
+  )
+
+checks_final <- make_checks_df(data_out, qaqc)
+plot_checks(checks_final, site)
+
+## ------------ E Join Output clean up environment ------------------
+
+# Add timeseries to output
+data_out <- data_out %>% 
+  select(-c('depth_avg')) 
+output_data <- bind_rows(output_data, data_out)  
+
+# Add checks to output
+checks_final <- checks_final %>%
+  mutate("Site_ID" = site) %>% 
+  rename(field_check_m = chk_m,
+         logger_val_m = logger_date_mean_trimmed)
+output_checks <- bind_rows(output_checks, checks_final)
+
+rm(site, data, qaqc, pivot_history, 
+   status, data_full, data_out, checks_final) 
+
+rm(offsets_to_use, new_offset, offset_cols_to_use, 
+   offset_dates_to_use, offset_names_to_use, offset_vals_use)
+rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
+   all_offset_names, all_offsets, checks, depth_cols)
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# XXXVIII) Site: 6_629-------------------------------------------------------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+## -------- A Read the site data/metadata -----------------
+site <- "6_629"
+data <- site_ts_from_xlsx_sheet(compiled_path, site)
+qaqc <- fetch_water_checks(meta_data_path, site) 
+pivot_history <- fetch_pivot_history(meta_data_path, site)
+status <- fetch_post_process_status(status_path, site)
+print(status$Notes)
+
+## ------ B Explore depth versions -------------------------
+data_full <- calc_stages_from_offsets(data, pivot_history)
+# Select columns to plot
+all_cols <- colnames(data_full)
+depth_cols <- grep('depth', all_cols, value=TRUE)
+not_to_plot <- c("sensor_depth")
+ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+print(ts_cols)
+
+# Make plots
+make_site_ts(site_ts=data_full, 
+             y_vars = ts_cols, 
+             qaqc_df = qaqc)
+# Plot checks
+checks <- make_checks_df(data_full, qaqc)
+plot_checks(checks, site)
+# Plot offsets
+all_offset_names <- grep("offset_m_", all_cols, value=TRUE)
+all_offset_dates <- grep("P_G/L_date_", all_cols, value=TRUE)
+all_offset_cols <- c(all_offset_dates, all_offset_names)
+all_offsets <- pivot_history %>% 
+  select(all_of(all_offset_cols))
+quick_plot_offset2(all_offsets)
+
+## ------- C Revise water depth -----------------------------------------
+
+print(all_offsets)
+
+# PICK OFFSET HERE
+### !!!!!!! offset V1 !!!!!!!!!!!!!!!!!
+offset_names_to_use <- all_offset_names[all_offset_names == "offset_m_1"]
+offset_dates_to_use <- all_offset_dates[all_offset_dates == "P_G/L_date_1"]
+offset_cols_to_use  <- c(offset_names_to_use, offset_dates_to_use)
+
+offsets_to_use <- pivot_history %>% 
+  select(all_of(offset_cols_to_use))
+offset_vals_use <- offsets_to_use %>% select(all_of(offset_names_to_use))
+new_offset <- offset_vals_use %>% unlist() %>% mean(na.rm=TRUE)
+
+# Apply the chosen offset to the entire timeseries
+data_full <- data_full %>%
+  mutate(
+    offset_version = offset_names_to_use,           
+    offset_value   = new_offset,            
+    revised_depth  = sensor_depth - offset_value,
+    flag           = 0,                      
+    notes          = NA_character_
+  )
+
+## ------- D Plot the data with a revised offset -----------------------
+
+make_site_ts(site_ts=data_full,
+             y_vars=c("original_depth", "revised_depth"),
+             qaqc)
+
+data_out <- data_full %>% 
+  select(
+    c(
+      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
+      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+    )
+  )
+
+checks_final <- make_checks_df(data_out, qaqc)
+plot_checks(checks_final, site)
+
+## ------------ E Join Output clean up environment ------------------
+
+# Add timeseries to output
+data_out <- data_out %>% 
+  select(-c('depth_avg')) 
+output_data <- bind_rows(output_data, data_out)  
+
+# Add checks to output
+checks_final <- checks_final %>%
+  mutate("Site_ID" = site) %>% 
+  rename(field_check_m = chk_m,
+         logger_val_m = logger_date_mean_trimmed)
+output_checks <- bind_rows(output_checks, checks_final)
+
+rm(site, data, qaqc, pivot_history, 
+   status, data_full, data_out, checks_final) 
+
+rm(offsets_to_use, new_offset, offset_cols_to_use, 
+   offset_dates_to_use, offset_names_to_use, offset_vals_use)
+rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
+   all_offset_names, all_offsets, checks, depth_cols)
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# XXXIX) Site: 6_93-------------------------------------------------------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+## -------- A Read the site data/metadata -----------------
+site <- "6_93"
+data <- site_ts_from_xlsx_sheet(compiled_path, site)
+qaqc <- fetch_water_checks(meta_data_path, site) 
+pivot_history <- fetch_pivot_history(meta_data_path, site)
+status <- fetch_post_process_status(status_path, site)
+print(status$Notes)
+
+## ------ B Explore depth versions -------------------------
+data_full <- calc_stages_from_offsets(data, pivot_history)
+# Select columns to plot
+all_cols <- colnames(data_full)
+depth_cols <- grep('depth', all_cols, value=TRUE)
+not_to_plot <- c("sensor_depth")
+ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+print(ts_cols)
+
+# Make plots
+make_site_ts(site_ts=data_full, 
+             y_vars = ts_cols, 
+             qaqc_df = qaqc)
+# Plot checks
+checks <- make_checks_df(data_full, qaqc)
+plot_checks(checks, site)
+# Plot offsets
+all_offset_names <- grep("offset_m_", all_cols, value=TRUE)
+all_offset_dates <- grep("P_G/L_date_", all_cols, value=TRUE)
+all_offset_cols <- c(all_offset_dates, all_offset_names)
+all_offsets <- pivot_history %>% 
+  select(all_of(all_offset_cols))
+quick_plot_offset2(all_offsets)
+
+## ------- C Revise water depth -----------------------------------------
+
+print(all_offsets)
+
+# PICK OFFSET HERE
+### !!!!!!! offset V1 !!!!!!!!!!!!!!!!!
+offset_names_to_use <- all_offset_names[all_offset_names == "offset_m_1"]
+offset_dates_to_use <- all_offset_dates[all_offset_dates == "P_G/L_date_1"]
+offset_cols_to_use  <- c(offset_names_to_use, offset_dates_to_use)
+
+offsets_to_use <- pivot_history %>% 
+  select(all_of(offset_cols_to_use))
+offset_vals_use <- offsets_to_use %>% select(all_of(offset_names_to_use))
+new_offset <- offset_vals_use %>% unlist() %>% mean(na.rm=TRUE)
+
+# Apply the chosen offset to the entire timeseries
+data_full <- data_full %>%
+  mutate(
+    offset_version = offset_names_to_use,           
+    offset_value   = new_offset,            
+    revised_depth  = sensor_depth - offset_value,
+    flag           = 1,                      
+    notes          = "High offset uncertianity. Used offset #1."
+  )
+
+## ------- D Plot the data with a revised offset -----------------------
+
+make_site_ts(site_ts=data_full,
+             y_vars=c("original_depth", "revised_depth"),
+             qaqc)
+
+data_out <- data_full %>% 
+  select(
+    c(
+      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
+      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+    )
+  )
+
+checks_final <- make_checks_df(data_out, qaqc)
+plot_checks(checks_final, site)
+
+## ------------ E Join Output clean up environment ------------------
+
+# Add timeseries to output
+data_out <- data_out %>% 
+  select(-c('depth_avg')) 
+output_data <- bind_rows(output_data, data_out)  
+
+# Add checks to output
+checks_final <- checks_final %>%
+  mutate("Site_ID" = site) %>% 
+  rename(field_check_m = chk_m,
+         logger_val_m = logger_date_mean_trimmed)
+output_checks <- bind_rows(output_checks, checks_final)
+
+rm(site, data, qaqc, pivot_history, 
+   status, data_full, data_out, checks_final) 
+
+rm(offsets_to_use, new_offset, offset_cols_to_use, 
+   offset_dates_to_use, offset_names_to_use, offset_vals_use)
+rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
+   all_offset_names, all_offsets, checks, depth_cols)
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# XL) Site: 6a_17-------------------------------------------------------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+## -------- A Read the site data/metadata -----------------
+site <- "6a_17"
+data <- site_ts_from_xlsx_sheet(compiled_path, site)
+qaqc <- fetch_water_checks(meta_data_path, site) 
+pivot_history <- fetch_pivot_history(meta_data_path, site)
+status <- fetch_post_process_status(status_path, site)
+print(status$Notes)
+
+## ------ B Explore depth versions -------------------------
+data_full <- calc_stages_from_offsets(data, pivot_history)
+# Select columns to plot
+all_cols <- colnames(data_full)
+depth_cols <- grep('depth', all_cols, value=TRUE)
+not_to_plot <- c("sensor_depth")
+ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+print(ts_cols)
+
+# Make plots
+make_site_ts(site_ts=data_full, 
+             y_vars = ts_cols, 
+             qaqc_df = qaqc)
+# Plot checks
+checks <- make_checks_df(data_full, qaqc)
+plot_checks(checks, site)
+# Plot offsets
+all_offset_names <- grep("offset_m_", all_cols, value=TRUE)
+all_offset_dates <- grep("P_G/L_date_", all_cols, value=TRUE)
+all_offset_cols <- c(all_offset_dates, all_offset_names)
+all_offsets <- pivot_history %>% 
+  select(all_of(all_offset_cols))
+quick_plot_offset2(all_offsets)
+
+## ------- C Revise water depth -----------------------------------------
+
+print(all_offsets)
+
+# PICK OFFSET HERE
+### !!!!!!! offset V3 !!!!!!!!!!!!!!!!!
+offset_names_to_use <- all_offset_names[all_offset_names == "offset_m_3"]
+offset_dates_to_use <- all_offset_dates[all_offset_dates == "P_G/L_date_3"]
+offset_cols_to_use  <- c(offset_names_to_use, offset_dates_to_use)
+
+offsets_to_use <- pivot_history %>% 
+  select(all_of(offset_cols_to_use))
+offset_vals_use <- offsets_to_use %>% select(all_of(offset_names_to_use))
+new_offset <- offset_vals_use %>% unlist() %>% mean(na.rm=TRUE)
+
+# Apply the chosen offset to the entire timeseries
+data_full <- data_full %>%
+  mutate(
+    offset_version = offset_names_to_use,           
+    offset_value   = new_offset,            
+    revised_depth  = sensor_depth - offset_value,
+    flag           = 1,                      
+    notes          = "High offset uncertianity, offset #1 much lower. Used v3 becuase it matched checks."
+  )
+
+## ------- D Plot the data with a revised offset -----------------------
+
+make_site_ts(site_ts=data_full,
+             y_vars=c("original_depth", "revised_depth"),
+             qaqc)
+
+data_out <- data_full %>% 
+  select(
+    c(
+      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
+      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+    )
+  )
+
+checks_final <- make_checks_df(data_out, qaqc)
+plot_checks(checks_final, site)
+
+## ------------ E Join Output clean up environment ------------------
+
+# Add timeseries to output
+data_out <- data_out %>% 
+  select(-c('depth_avg')) 
+output_data <- bind_rows(output_data, data_out)  
+
+# Add checks to output
+checks_final <- checks_final %>%
+  mutate("Site_ID" = site) %>% 
+  rename(field_check_m = chk_m,
+         logger_val_m = logger_date_mean_trimmed)
+output_checks <- bind_rows(output_checks, checks_final)
+
+rm(site, data, qaqc, pivot_history, 
+   status, data_full, data_out, checks_final) 
+
+rm(offsets_to_use, new_offset, offset_cols_to_use, 
+   offset_dates_to_use, offset_names_to_use, offset_vals_use)
+rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
+   all_offset_names, all_offsets, checks, depth_cols)
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# XLI) Site: 6a_530-------------------------------------------------------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+## -------- A Read the site data/metadata -----------------
+site <- "6a_530"
+data <- site_ts_from_xlsx_sheet(compiled_path, site)
+qaqc <- fetch_water_checks(meta_data_path, site) 
+pivot_history <- fetch_pivot_history(meta_data_path, site)
+status <- fetch_post_process_status(status_path, site)
+print(status$Notes)
+
+## ------ B Explore depth versions -------------------------
+data_full <- calc_stages_from_offsets(data, pivot_history)
+# Select columns to plot
+all_cols <- colnames(data_full)
+depth_cols <- grep('depth', all_cols, value=TRUE)
+not_to_plot <- c("sensor_depth")
+ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+print(ts_cols)
+
+# Make plots
+make_site_ts(site_ts=data_full, 
+             y_vars = ts_cols, 
+             qaqc_df = qaqc)
+# Plot checks
+checks <- make_checks_df(data_full, qaqc)
+plot_checks(checks, site)
+# Plot offsets
+all_offset_names <- grep("offset_m_", all_cols, value=TRUE)
+all_offset_dates <- grep("P_G/L_date_", all_cols, value=TRUE)
+all_offset_cols <- c(all_offset_dates, all_offset_names)
+all_offsets <- pivot_history %>% 
+  select(all_of(all_offset_cols))
+quick_plot_offset2(all_offsets)
+
+## ------- C Revise water depth -----------------------------------------
+
+print(all_offsets)
+
+# PICK OFFSET HERE
+### !!!!!!! offset V1 !!!!!!!!!!!!!!!!!
+offset_names_to_use <- all_offset_names[all_offset_names == "offset_m_1"]
+offset_dates_to_use <- all_offset_dates[all_offset_dates == "P_G/L_date_1"]
+offset_cols_to_use  <- c(offset_names_to_use, offset_dates_to_use)
+
+offsets_to_use <- pivot_history %>% 
+  select(all_of(offset_cols_to_use))
+offset_vals_use <- offsets_to_use %>% select(all_of(offset_names_to_use))
+new_offset <- offset_vals_use %>% unlist() %>% mean(na.rm=TRUE)
+
+# Apply the chosen offset to the entire timeseries
+data_full <- data_full %>%
+  mutate(
+    offset_version = offset_names_to_use,           
+    offset_value   = new_offset,            
+    revised_depth  = sensor_depth - offset_value,
+    flag           = 0,                      
+    notes          = NA_character_
+  )
+
+## ------- D Plot the data with a revised offset -----------------------
+
+make_site_ts(site_ts=data_full,
+             y_vars=c("original_depth", "revised_depth"),
+             qaqc)
+
+data_out <- data_full %>% 
+  select(
+    c(
+      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
+      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+    )
+  )
+
+checks_final <- make_checks_df(data_out, qaqc)
+plot_checks(checks_final, site)
+
+## ------------ E Join Output clean up environment ------------------
+
+# Add timeseries to output
+data_out <- data_out %>% 
+  select(-c('depth_avg')) 
+output_data <- bind_rows(output_data, data_out)  
+
+# Add checks to output
+checks_final <- checks_final %>%
+  mutate("Site_ID" = site) %>% 
+  rename(field_check_m = chk_m,
+         logger_val_m = logger_date_mean_trimmed)
+output_checks <- bind_rows(output_checks, checks_final)
+
+rm(site, data, qaqc, pivot_history, 
+   status, data_full, data_out, checks_final) 
+
+rm(offsets_to_use, new_offset, offset_cols_to_use, 
+   offset_dates_to_use, offset_names_to_use, offset_vals_use)
+rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
+   all_offset_names, all_offsets, checks, depth_cols)
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# XLII) Site: 7_243-------------------------------------------------------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+## -------- A Read the site data/metadata -----------------
+site <- "7_243"
+data <- site_ts_from_xlsx_sheet(compiled_path, site)
+qaqc <- fetch_water_checks(meta_data_path, site) 
+pivot_history <- fetch_pivot_history(meta_data_path, site)
+status <- fetch_post_process_status(status_path, site)
+print(status$Notes)
+
+## ------ B Explore depth versions -------------------------
+data_full <- calc_stages_from_offsets(data, pivot_history)
+# Select columns to plot
+all_cols <- colnames(data_full)
+depth_cols <- grep('depth', all_cols, value=TRUE)
+not_to_plot <- c("sensor_depth")
+ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+print(ts_cols)
+
+# Make plots
+make_site_ts(site_ts=data_full, 
+             y_vars = ts_cols, 
+             qaqc_df = qaqc)
+# Plot checks
+checks <- make_checks_df(data_full, qaqc)
+plot_checks(checks, site)
+# Plot offsets
+all_offset_names <- grep("offset_m_", all_cols, value=TRUE)
+all_offset_dates <- grep("P_G/L_date_", all_cols, value=TRUE)
+all_offset_cols <- c(all_offset_dates, all_offset_names)
+all_offsets <- pivot_history %>% 
+  select(all_of(all_offset_cols))
+quick_plot_offset2(all_offsets)
+
+## ------- C Revise water depth -----------------------------------------
+
+print(all_offsets)
+
+# PICK OFFSET HERE
+### !!!!!!! offset V1 !!!!!!!!!!!!!!!!!
+offset_names_to_use <- all_offset_names[all_offset_names == "offset_m_3"]
+offset_dates_to_use <- all_offset_dates[all_offset_dates == "P_G/L_date_3"]
+offset_cols_to_use  <- c(offset_names_to_use, offset_dates_to_use)
+
+offsets_to_use <- pivot_history %>% 
+  select(all_of(offset_cols_to_use))
+offset_vals_use <- offsets_to_use %>% select(all_of(offset_names_to_use))
+new_offset <- offset_vals_use %>% unlist() %>% mean(na.rm=TRUE)
+
+# Apply the chosen offset to the entire timeseries
+data_full <- data_full %>%
+  mutate(
+    offset_version = offset_names_to_use,           
+    offset_value   = new_offset,            
+    revised_depth  = sensor_depth - offset_value,
+    flag           = 0,                      
+    notes          = NA_character_
+  )
+
+## ------- D Plot the data with a revised offset -----------------------
+
+make_site_ts(site_ts=data_full,
+             y_vars=c("original_depth", "revised_depth"),
+             qaqc)
+
+data_out <- data_full %>% 
+  select(
+    c(
+      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
+      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+    )
+  )
+
+checks_final <- make_checks_df(data_out, qaqc)
+plot_checks(checks_final, site)
+
+## ------------ E Join Output clean up environment ------------------
+
+# Add timeseries to output
+data_out <- data_out %>% 
+  select(-c('depth_avg')) 
+output_data <- bind_rows(output_data, data_out)  
+
+# Add checks to output
+checks_final <- checks_final %>%
+  mutate("Site_ID" = site) %>% 
+  rename(field_check_m = chk_m,
+         logger_val_m = logger_date_mean_trimmed)
+output_checks <- bind_rows(output_checks, checks_final)
+
+rm(site, data, qaqc, pivot_history, 
+   status, data_full, data_out, checks_final) 
+
+rm(offsets_to_use, new_offset, offset_cols_to_use, 
+   offset_dates_to_use, offset_names_to_use, offset_vals_use)
+rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
+   all_offset_names, all_offsets, checks, depth_cols)
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# XLIII) Site: 7_341-------------------------------------------------------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+## -------- A Read the site data/metadata -----------------
+site <- "7_341"
+data <- site_ts_from_xlsx_sheet(compiled_path, site)
+qaqc <- fetch_water_checks(meta_data_path, site) 
+pivot_history <- fetch_pivot_history(meta_data_path, site)
+status <- fetch_post_process_status(status_path, site)
+print(status$Notes)
+
+## ------ B Explore depth versions -------------------------
+data_full <- calc_stages_from_offsets(data, pivot_history)
+# Select columns to plot
+all_cols <- colnames(data_full)
+depth_cols <- grep('depth', all_cols, value=TRUE)
+not_to_plot <- c("sensor_depth")
+ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+print(ts_cols)
+
+# Make plots
+make_site_ts(site_ts=data_full, 
+             y_vars = ts_cols, 
+             qaqc_df = qaqc)
+# Plot checks
+checks <- make_checks_df(data_full, qaqc)
+plot_checks(checks, site)
+# Plot offsets
+all_offset_names <- grep("offset_m_", all_cols, value=TRUE)
+all_offset_dates <- grep("P_G/L_date_", all_cols, value=TRUE)
+all_offset_cols <- c(all_offset_dates, all_offset_names)
+all_offsets <- pivot_history %>% 
+  select(all_of(all_offset_cols))
+quick_plot_offset2(all_offsets)
+
+## ------- C Revise water depth -----------------------------------------
+
+print(all_offsets)
+
+# PICK OFFSET HERE
+### !!!!!!! offset V1 !!!!!!!!!!!!!!!!!
+offset_names_to_use <- all_offset_names[all_offset_names == "offset_m_1"]
+offset_dates_to_use <- all_offset_dates[all_offset_dates == "P_G/L_date_1"]
+offset_cols_to_use  <- c(offset_names_to_use, offset_dates_to_use)
+
+offsets_to_use <- pivot_history %>% 
+  select(all_of(offset_cols_to_use))
+offset_vals_use <- offsets_to_use %>% select(all_of(offset_names_to_use))
+new_offset <- offset_vals_use %>% unlist() %>% mean(na.rm=TRUE)
+
+# Apply the chosen offset to the entire timeseries
+data_full <- data_full %>%
+  mutate(
+    offset_version = offset_names_to_use,           
+    offset_value   = new_offset,            
+    revised_depth  = sensor_depth - offset_value,
+    flag           = 0,                      
+    notes          = NA_character_
+  )
+
+## ------- D Plot the data with a revised offset -----------------------
+
+make_site_ts(site_ts=data_full,
+             y_vars=c("original_depth", "revised_depth"),
+             qaqc)
+
+data_out <- data_full %>% 
+  select(
+    c(
+      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
+      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+    )
+  )
+
+checks_final <- make_checks_df(data_out, qaqc)
+plot_checks(checks_final, site)
+
+## ------------ E Join Output clean up environment ------------------
+
+# Add timeseries to output
+data_out <- data_out %>% 
+  select(-c('depth_avg')) 
+output_data <- bind_rows(output_data, data_out)  
+
+# Add checks to output
+checks_final <- checks_final %>%
+  mutate("Site_ID" = site) %>% 
+  rename(field_check_m = chk_m,
+         logger_val_m = logger_date_mean_trimmed)
+output_checks <- bind_rows(output_checks, checks_final)
+
+rm(site, data, qaqc, pivot_history, 
+   status, data_full, data_out, checks_final) 
+
+rm(offsets_to_use, new_offset, offset_cols_to_use, 
+   offset_dates_to_use, offset_names_to_use, offset_vals_use)
+rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
+   all_offset_names, all_offsets, checks, depth_cols)
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# XLIV) Site: 7_622-------------------------------------------------------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+## -------- A Read the site data/metadata -----------------
+# site <- "7_622"
+# data <- site_ts_from_xlsx_sheet(compiled_path, site)
+
+# ----- !!!! Site 7_622 not in compiled wetland stage 2 !!! ----------
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# XLV) Site: 7_626-------------------------------------------------------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+## -------- A Read the site data/metadata -----------------
+site <- "7_626"
+data <- site_ts_from_xlsx_sheet(compiled_path, site)
+qaqc <- fetch_water_checks(meta_data_path, site) 
+pivot_history <- fetch_pivot_history(meta_data_path, site)
+status <- fetch_post_process_status(status_path, site)
+print(status$Notes)
 
 
+## ------ B Explore depth versions -------------------------
+data_full <- calc_stages_from_offsets(data, pivot_history)
+# Select columns to plot
+all_cols <- colnames(data_full)
+depth_cols <- grep('depth', all_cols, value=TRUE)
+not_to_plot <- c("sensor_depth")
+ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+print(ts_cols)
+
+# Make plots
+make_site_ts(site_ts=data_full, 
+             y_vars = ts_cols, 
+             qaqc_df = qaqc)
+# Plot checks
+checks <- make_checks_df(data_full, qaqc)
+plot_checks(checks, site)
+# Plot offsets
+all_offset_names <- grep("offset_m_", all_cols, value=TRUE)
+all_offset_dates <- grep("P_G/L_date_", all_cols, value=TRUE)
+all_offset_cols <- c(all_offset_dates, all_offset_names)
+all_offsets <- pivot_history %>% 
+  select(all_of(all_offset_cols))
+quick_plot_offset2(all_offsets)
+
+## ------- C Revise water depth -----------------------------------------
+
+print(all_offsets)
+
+# PICK OFFSET HERE
+### !!!!!!! offset V1 !!!!!!!!!!!!!!!!!
+offset_names_to_use <- all_offset_names[all_offset_names == "offset_m_1"]
+offset_dates_to_use <- all_offset_dates[all_offset_dates == "P_G/L_date_1"]
+offset_cols_to_use  <- c(offset_names_to_use, offset_dates_to_use)
+
+offsets_to_use <- pivot_history %>% 
+  select(all_of(offset_cols_to_use))
+offset_vals_use <- offsets_to_use %>% select(all_of(offset_names_to_use))
+new_offset <- offset_vals_use %>% unlist() %>% mean(na.rm=TRUE)
+
+# Apply the chosen offset to the entire timeseries
+data_full <- data_full %>%
+  mutate(
+    offset_version = offset_names_to_use,           
+    offset_value   = new_offset,            
+    revised_depth  = sensor_depth - offset_value,
+    flag           = 0,                      
+    notes          = NA_character_
+  )
+
+## ------- D Plot the data with a revised offset -----------------------
+
+make_site_ts(site_ts=data_full,
+             y_vars=c("original_depth", "revised_depth"),
+             qaqc)
+
+data_out <- data_full %>% 
+  select(
+    c(
+      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
+      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+    )
+  )
+
+checks_final <- make_checks_df(data_out, qaqc)
+plot_checks(checks_final, site)
+
+## ------------ E Join Output clean up environment ------------------
+
+# Add timeseries to output
+data_out <- data_out %>% 
+  select(-c('depth_avg')) 
+output_data <- bind_rows(output_data, data_out)  
+
+# Add checks to output
+checks_final <- checks_final %>%
+  mutate("Site_ID" = site) %>% 
+  rename(field_check_m = chk_m,
+         logger_val_m = logger_date_mean_trimmed)
+output_checks <- bind_rows(output_checks, checks_final)
+
+rm(site, data, qaqc, pivot_history, 
+   status, data_full, data_out, checks_final) 
+
+rm(offsets_to_use, new_offset, offset_cols_to_use, 
+   offset_dates_to_use, offset_names_to_use, offset_vals_use)
+rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
+   all_offset_names, all_offsets, checks, depth_cols)
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# XLVI) Site: 9_332-------------------------------------------------------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+## -------- A Read the site data/metadata -----------------
+site <- "9_332"
+data <- site_ts_from_xlsx_sheet(compiled_path, site)
+qaqc <- fetch_water_checks(meta_data_path, site) 
+pivot_history <- fetch_pivot_history(meta_data_path, site)
+status <- fetch_post_process_status(status_path, site)
+print(status$Notes)
+
+## ------ B Explore depth versions -------------------------
+data_full <- calc_stages_from_offsets(data, pivot_history)
+# Select columns to plot
+all_cols <- colnames(data_full)
+depth_cols <- grep('depth', all_cols, value=TRUE)
+not_to_plot <- c("sensor_depth")
+ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+print(ts_cols)
+
+# Make plots
+make_site_ts(site_ts=data_full, 
+             y_vars = ts_cols, 
+             qaqc_df = qaqc)
+# Plot checks
+checks <- make_checks_df(data_full, qaqc)
+plot_checks(checks, site)
+# Plot offsets
+all_offset_names <- grep("offset_m_", all_cols, value=TRUE)
+all_offset_dates <- grep("P_G/L_date_", all_cols, value=TRUE)
+all_offset_cols <- c(all_offset_dates, all_offset_names)
+all_offsets <- pivot_history %>% 
+  select(all_of(all_offset_cols))
+quick_plot_offset2(all_offsets)
+
+## ------- C Revise water depth -----------------------------------------
+
+print(all_offsets)
+# PICK OFFSET HERE
+### !!!!!!! offset V2 !!!!!!!!!!!!!!!!!!
+offset_names_to_use1 <- all_offset_names[all_offset_names == "offset_m_2"]
+offset_dates_to_use1 <- all_offset_dates[all_offset_dates == "P_G/L_date_2"]
+offset_cols_to_use1 <- c(offset_names_to_use1, offset_dates_to_use1)
+offsets_to_use1 <- pivot_history %>% 
+  select(all_of(offset_cols_to_use1))
+offset_vals_use1 <- offsets_to_use1 %>% select(all_of(offset_names_to_use1))
+
+new_offset1 <- offset_vals_use1 %>%  unlist() %>% mean(na.rm = TRUE)
+
+### !!!!!!! Needed to find new offset !!!!!!!!!!!!!!!!!
+offset_names_to_use2 <- "Guessed offset from TS differences"
+new_offset2 <- -0.14
+
+# Apply the chosen offset to the entire timeseries
+data_full <- data_full %>% 
+  # Apply offset #1 prior to April 14th 2022
+  # Apply offset #2 after April 15th 2022
+  # Delete data in between
+  mutate(
+    offset_version = case_when(
+      Date <  as.Date("2023-08-07") ~ offset_names_to_use1,
+      Date >  as.Date("2023-08-10") ~ offset_names_to_use2,
+      TRUE                          ~ NA_character_  # "Between" dates get NA 
+    ),
+    offset_value = case_when(
+      Date <  as.Date("2023-08-07") ~ new_offset1,
+      Date >  as.Date("2023-08-10") ~ new_offset2,
+      TRUE                          ~ NA_real_
+    ),
+    flag = 1,
+    notes = "Extreme offset uncertianity used V2, then had to guess new offset. Was the well re-augered on Aug 9th 2023??",
+    revised_depth = case_when(
+      Date <  as.Date("2023-08-07") ~ sensor_depth - offset_value,
+      Date >  as.Date("2023-08-10") ~ sensor_depth - offset_value,
+      TRUE ~ NA_real_
+    ),
+  )
+
+## ------- D Plot the data with a revised offset -----------------------
+
+make_site_ts(site_ts=data_full,
+             y_vars=c("original_depth", "revised_depth"),
+             qaqc)
+
+data_out <- data_full %>% 
+  select(
+    c(
+      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
+      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+    )
+  )
+
+checks_final <- make_checks_df(data_out, qaqc)
+plot_checks(checks_final, site)
+
+## ------------ E Join Output clean up environment ------------------
+
+# Add timeseries to output
+data_out <- data_out %>% 
+  select(-c('depth_avg')) 
+output_data <- bind_rows(output_data, data_out)  
+
+# Add checks to output
+checks_final <- checks_final %>%
+  mutate("Site_ID" = site) %>% 
+  rename(field_check_m = chk_m,
+         logger_val_m = logger_date_mean_trimmed)
+output_checks <- bind_rows(output_checks, checks_final)
+
+rm(site, data, qaqc, pivot_history, 
+   status, data_full, data_out, checks_final) 
+
+rm(offsets_to_use1, new_offset1, new_offset2,
+   offset_cols_to_use1, offset_dates_to_use1,
+   offset_names_to_use1, offset_names_to_use2,
+   offset_vals_use1)
+rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
+   all_offset_names, all_offsets, checks, depth_cols)
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# XLVII) Site: 9_439-------------------------------------------------------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+## -------- A Read the site data/metadata -----------------
+site <- "9_439"
+data <- site_ts_from_xlsx_sheet(compiled_path, site)
+qaqc <- fetch_water_checks(meta_data_path, site) 
+pivot_history <- fetch_pivot_history(meta_data_path, site)
+status <- fetch_post_process_status(status_path, site)
+print(status$Notes)
 
 
+## ------ B Explore depth versions -------------------------
+data_full <- calc_stages_from_offsets(data, pivot_history)
+# Select columns to plot
+all_cols <- colnames(data_full)
+depth_cols <- grep('depth', all_cols, value=TRUE)
+not_to_plot <- c("sensor_depth")
+ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+print(ts_cols)
+
+# Make plots
+make_site_ts(site_ts=data_full, 
+             y_vars = ts_cols, 
+             qaqc_df = qaqc)
+# Plot checks
+checks <- make_checks_df(data_full, qaqc)
+plot_checks(checks, site)
+# Plot offsets
+all_offset_names <- grep("offset_m_", all_cols, value=TRUE)
+all_offset_dates <- grep("P_G/L_date_", all_cols, value=TRUE)
+all_offset_cols <- c(all_offset_dates, all_offset_names)
+all_offsets <- pivot_history %>% 
+  select(all_of(all_offset_cols))
+quick_plot_offset2(all_offsets)
+
+## ------- C Revise water depth -----------------------------------------
+
+print(all_offsets)
+
+# PICK OFFSET HERE
+### !!!!!!! offset V1 !!!!!!!!!!!!!!!!!
+offset_names_to_use <- all_offset_names[all_offset_names == "offset_m_1"]
+offset_dates_to_use <- all_offset_dates[all_offset_dates == "P_G/L_date_1"]
+offset_cols_to_use  <- c(offset_names_to_use, offset_dates_to_use)
+
+offsets_to_use <- pivot_history %>% 
+  select(all_of(offset_cols_to_use))
+offset_vals_use <- offsets_to_use %>% select(all_of(offset_names_to_use))
+new_offset <- offset_vals_use %>% unlist() %>% mean(na.rm=TRUE)
+
+# Apply the chosen offset to the entire timeseries
+data_full <- data_full %>%
+  mutate(
+    offset_version = offset_names_to_use,           
+    offset_value   = new_offset,            
+    revised_depth  = sensor_depth - offset_value,
+    flag           = 0,                      
+    notes          = NA_character_
+  )
+
+## ------- D Plot the data with a revised offset -----------------------
+
+make_site_ts(site_ts=data_full,
+             y_vars=c("original_depth", "revised_depth"),
+             qaqc)
+
+data_out <- data_full %>% 
+  select(
+    c(
+      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
+      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+    )
+  )
+
+checks_final <- make_checks_df(data_out, qaqc)
+plot_checks(checks_final, site)
+
+## ------------ E Join Output clean up environment ------------------
+
+# Add timeseries to output
+data_out <- data_out %>% 
+  select(-c('depth_avg')) 
+output_data <- bind_rows(output_data, data_out)  
+
+# Add checks to output
+checks_final <- checks_final %>%
+  mutate("Site_ID" = site) %>% 
+  rename(field_check_m = chk_m,
+         logger_val_m = logger_date_mean_trimmed)
+output_checks <- bind_rows(output_checks, checks_final)
+
+rm(site, data, qaqc, pivot_history, 
+   status, data_full, data_out, checks_final) 
+
+rm(offsets_to_use, new_offset, offset_cols_to_use, 
+   offset_dates_to_use, offset_names_to_use, offset_vals_use)
+rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
+   all_offset_names, all_offsets, checks, depth_cols)
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# XLVIII) Site: 9_508-------------------------------------------------------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+## -------- A Read the site data/metadata -----------------
+site <- "9_508"
+data <- site_ts_from_xlsx_sheet(compiled_path, site)
+qaqc <- fetch_water_checks(meta_data_path, site) 
+pivot_history <- fetch_pivot_history(meta_data_path, site)
+status <- fetch_post_process_status(status_path, site)
+print(status$Notes)
+
+
+## ------ B Explore depth versions -------------------------
+data_full <- calc_stages_from_offsets(data, pivot_history)
+# Select columns to plot
+all_cols <- colnames(data_full)
+depth_cols <- grep('depth', all_cols, value=TRUE)
+not_to_plot <- c("sensor_depth")
+ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+print(ts_cols)
+
+# Make plots
+make_site_ts(site_ts=data_full, 
+             y_vars = ts_cols, 
+             qaqc_df = qaqc)
+# Plot checks
+checks <- make_checks_df(data_full, qaqc)
+plot_checks(checks, site)
+# Plot offsets
+all_offset_names <- grep("offset_m_", all_cols, value=TRUE)
+all_offset_dates <- grep("P_G/L_date_", all_cols, value=TRUE)
+all_offset_cols <- c(all_offset_dates, all_offset_names)
+all_offsets <- pivot_history %>% 
+  select(all_of(all_offset_cols))
+quick_plot_offset2(all_offsets)
+
+## ------- C Revise water depth -----------------------------------------
+
+print(all_offsets)
+
+# PICK OFFSET HERE
+### !!!!!!! offset V1 !!!!!!!!!!!!!!!!!
+offset_names_to_use <- all_offset_names[all_offset_names == "offset_m_1"]
+offset_dates_to_use <- all_offset_dates[all_offset_dates == "P_G/L_date_1"]
+offset_cols_to_use  <- c(offset_names_to_use, offset_dates_to_use)
+
+offsets_to_use <- pivot_history %>% 
+  select(all_of(offset_cols_to_use))
+offset_vals_use <- offsets_to_use %>% select(all_of(offset_names_to_use))
+new_offset <- offset_vals_use %>% unlist() %>% mean(na.rm=TRUE)
+
+# Apply the chosen offset to the entire timeseries
+data_full <- data_full %>%
+  mutate(
+    offset_version = offset_names_to_use,           
+    offset_value   = new_offset,            
+    revised_depth  = sensor_depth - offset_value,
+    flag           = 1,                      
+    notes          = "High offset uncertianity V1 is 15cm lower than V2/V3. Used V1."
+  )
+
+## ------- D Plot the data with a revised offset -----------------------
+
+make_site_ts(site_ts=data_full,
+             y_vars=c("original_depth", "revised_depth"),
+             qaqc)
+
+data_out <- data_full %>% 
+  select(
+    c(
+      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
+      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+    )
+  )
+
+checks_final <- make_checks_df(data_out, qaqc)
+plot_checks(checks_final, site)
+
+## ------------ E Join Output clean up environment ------------------
+
+# Add timeseries to output
+data_out <- data_out %>% 
+  select(-c('depth_avg')) 
+output_data <- bind_rows(output_data, data_out)  
+
+# Add checks to output
+checks_final <- checks_final %>%
+  mutate("Site_ID" = site) %>% 
+  rename(field_check_m = chk_m,
+         logger_val_m = logger_date_mean_trimmed)
+output_checks <- bind_rows(output_checks, checks_final)
+
+rm(site, data, qaqc, pivot_history, 
+   status, data_full, data_out, checks_final) 
+
+rm(offsets_to_use, new_offset, offset_cols_to_use, 
+   offset_dates_to_use, offset_names_to_use, offset_vals_use)
+rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
+   all_offset_names, all_offsets, checks, depth_cols)
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# XLIX) Site: 9_609-------------------------------------------------------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+## -------- A Read the site data/metadata -----------------
+site <- "9_609"
+data <- site_ts_from_xlsx_sheet(compiled_path, site)
+qaqc <- fetch_water_checks(meta_data_path, site) 
+pivot_history <- fetch_pivot_history(meta_data_path, site)
+status <- fetch_post_process_status(status_path, site)
+print(status$Notes)
+
+
+## ------ B Explore depth versions -------------------------
+data_full <- calc_stages_from_offsets(data, pivot_history)
+# Select columns to plot
+all_cols <- colnames(data_full)
+depth_cols <- grep('depth', all_cols, value=TRUE)
+not_to_plot <- c("sensor_depth")
+ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+print(ts_cols)
+
+# Make plots
+make_site_ts(site_ts=data_full, 
+             y_vars = ts_cols, 
+             qaqc_df = qaqc)
+# Plot checks
+checks <- make_checks_df(data_full, qaqc)
+plot_checks(checks, site)
+# Plot offsets
+all_offset_names <- grep("offset_m_", all_cols, value=TRUE)
+all_offset_dates <- grep("P_G/L_date_", all_cols, value=TRUE)
+all_offset_cols <- c(all_offset_dates, all_offset_names)
+all_offsets <- pivot_history %>% 
+  select(all_of(all_offset_cols))
+quick_plot_offset2(all_offsets)
+
+## ------- C Revise water depth -----------------------------------------
+
+print(all_offsets)
+
+# PICK OFFSET HERE
+### !!!!!!! offset V1 !!!!!!!!!!!!!!!!!
+offset_names_to_use <- all_offset_names[all_offset_names == "offset_m_1"]
+offset_dates_to_use <- all_offset_dates[all_offset_dates == "P_G/L_date_1"]
+offset_cols_to_use  <- c(offset_names_to_use, offset_dates_to_use)
+
+offsets_to_use <- pivot_history %>% 
+  select(all_of(offset_cols_to_use))
+offset_vals_use <- offsets_to_use %>% select(all_of(offset_names_to_use))
+new_offset <- offset_vals_use %>% unlist() %>% mean(na.rm=TRUE)
+
+# Apply the chosen offset to the entire timeseries
+data_full <- data_full %>%
+  mutate(
+    offset_version = offset_names_to_use,           
+    offset_value   = new_offset,            
+    revised_depth  = sensor_depth - offset_value,
+    flag           = 0,                      
+    notes          = NA_character_
+  )
+
+## ------- D Plot the data with a revised offset -----------------------
+
+make_site_ts(site_ts=data_full,
+             y_vars=c("original_depth", "revised_depth"),
+             qaqc)
+
+data_out <- data_full %>% 
+  select(
+    c(
+      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
+      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+    )
+  )
+
+checks_final <- make_checks_df(data_out, qaqc)
+plot_checks(checks_final, site)
+
+## ------------ E Join Output clean up environment ------------------
+
+# Add timeseries to output
+data_out <- data_out %>% 
+  select(-c('depth_avg')) 
+output_data <- bind_rows(output_data, data_out)  
+
+# Add checks to output
+checks_final <- checks_final %>%
+  mutate("Site_ID" = site) %>% 
+  rename(field_check_m = chk_m,
+         logger_val_m = logger_date_mean_trimmed)
+output_checks <- bind_rows(output_checks, checks_final)
+
+rm(site, data, qaqc, pivot_history, 
+   status, data_full, data_out, checks_final) 
+
+rm(offsets_to_use, new_offset, offset_cols_to_use, 
+   offset_dates_to_use, offset_names_to_use, offset_vals_use)
+rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
+   all_offset_names, all_offsets, checks, depth_cols)
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# L) Site: 9_77-------------------------------------------------------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+## -------- A Read the site data/metadata -----------------
+site <- "9_77"
+data <- site_ts_from_xlsx_sheet(compiled_path, site)
+qaqc <- fetch_water_checks(meta_data_path, site) 
+pivot_history <- fetch_pivot_history(meta_data_path, site)
+status <- fetch_post_process_status(status_path, site)
+print(status$Notes)
+
+## ------ B Explore depth versions -------------------------
+data_full <- calc_stages_from_offsets(data, pivot_history)
+# Select columns to plot
+all_cols <- colnames(data_full)
+depth_cols <- grep('depth', all_cols, value=TRUE)
+not_to_plot <- c("sensor_depth")
+ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+print(ts_cols)
+
+# Make plots
+make_site_ts(site_ts=data_full, 
+             y_vars = ts_cols, 
+             qaqc_df = qaqc)
+# Plot checks
+checks <- make_checks_df(data_full, qaqc)
+plot_checks(checks, site)
+# Plot offsets
+all_offset_names <- grep("offset_m_", all_cols, value=TRUE)
+all_offset_dates <- grep("P_G/L_date_", all_cols, value=TRUE)
+all_offset_cols <- c(all_offset_dates, all_offset_names)
+all_offsets <- pivot_history %>% 
+  select(all_of(all_offset_cols))
+quick_plot_offset2(all_offsets)
+
+## ------- C Revise water depth -----------------------------------------
+
+print(all_offsets)
+
+# PICK OFFSET HERE
+### !!!!!!! offset V1 !!!!!!!!!!!!!!!!!
+offset_names_to_use <- all_offset_names[all_offset_names == "offset_m_1"]
+offset_dates_to_use <- all_offset_dates[all_offset_dates == "P_G/L_date_1"]
+offset_cols_to_use  <- c(offset_names_to_use, offset_dates_to_use)
+
+offsets_to_use <- pivot_history %>% 
+  select(all_of(offset_cols_to_use))
+offset_vals_use <- offsets_to_use %>% select(all_of(offset_names_to_use))
+new_offset <- offset_vals_use %>% unlist() %>% mean(na.rm=TRUE)
+
+# Apply the chosen offset to the entire timeseries
+data_full <- data_full %>%
+  mutate(
+    offset_version = offset_names_to_use,           
+    offset_value   = new_offset,            
+    revised_depth  = sensor_depth - offset_value,
+    flag           = 0,                      
+    notes          = NA_character_
+  )
+
+## ------- D Plot the data with a revised offset -----------------------
+
+make_site_ts(site_ts=data_full,
+             y_vars=c("original_depth", "revised_depth"),
+             qaqc)
+
+data_out <- data_full %>% 
+  select(
+    c(
+      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
+      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+    )
+  )
+
+checks_final <- make_checks_df(data_out, qaqc)
+plot_checks(checks_final, site)
+
+## ------------ E Join Output clean up environment ------------------
+
+# Add timeseries to output
+data_out <- data_out %>% 
+  select(-c('depth_avg')) 
+output_data <- bind_rows(output_data, data_out)  
+
+# Add checks to output
+checks_final <- checks_final %>%
+  mutate("Site_ID" = site) %>% 
+  rename(field_check_m = chk_m,
+         logger_val_m = logger_date_mean_trimmed)
+output_checks <- bind_rows(output_checks, checks_final)
+
+rm(site, data, qaqc, pivot_history, 
+   status, data_full, data_out, checks_final) 
+
+rm(offsets_to_use, new_offset, offset_cols_to_use, 
+   offset_dates_to_use, offset_names_to_use, offset_vals_use)
+rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
+   all_offset_names, all_offsets, checks, depth_cols)
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# WRITE OUTPUT DATA & CHECKS-------------------------------------------------------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+write_csv(output_checks, './data/out_data/well_checks_log.csv')
+write_csv(output_data, './data/out_data/waterlevel_offsets_tracked.csv')
 
 
 

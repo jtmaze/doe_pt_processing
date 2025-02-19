@@ -266,6 +266,15 @@ quick_plot_offset2 <- function(offsets_to_use){
       title = "Quick Plot of Offsets Colored by Date"
     ) +
     theme_minimal() +
+    theme(
+      # Make axis titles and text bold
+      axis.title = element_text(face = "bold", size=16),
+      axis.text  = element_text(face = "bold", size=12),
+      
+      # Make gridlines thicker
+      panel.grid.major = element_line(size = 1),  # Adjust size for major gridlines
+      panel.grid.minor = element_line(size = 0.5) # Adjust size for minor gridlines (if present)
+    ) +
     # Ensure "Mean" appears on the x-axis after all numeric indices
     scale_x_discrete(limits = c(unique(combined$offset_id), "Mean"))
   
