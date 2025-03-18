@@ -70,7 +70,8 @@ points_to_shapefile <- function(points_df, version, out_dir){
   out_path = paste0(out_dir, "wetland_well_points_v", version, ".shp")
   st_write(points_sf,
            out_path,
-           driver="ESRI Shapefile")
+           driver="ESRI Shapefile",
+           append=FALSE)
 }
 
 #### Write each version as a shapefile
