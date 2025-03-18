@@ -5,6 +5,16 @@
 ###
 library(tidyverse)
 
+full_ts <- read_csv('./data/out_data/waterlevel_offsets_tracked.csv')
+
+flag_site_ids <- full_ts %>%
+  filter(flag != 0) %>% 
+  distinct(Site_ID) %>%
+  pull(Site_ID)
+
+print(flag_site_ids)
+
+
 df <- read_csv('./data/out_data/well_checks_log.csv')
 
 # ----- Original/Revised Boxplots showing agreement -------

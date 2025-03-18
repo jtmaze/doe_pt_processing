@@ -3,6 +3,7 @@ library('dplyr')
 library('readxl')
 
 meta_data_path <- "./data/Wetland_well_metadata_1.xlsx"
+rtk_data_path <- "./data/rtk_data_digitized.xlsx"
 out_dir <- "./data/out_data/"
 
 
@@ -40,6 +41,16 @@ coord_data_avg <- coord_data %>%
     lat = Lat_AVG,
     long = Long_AVG
   )
+
+
+coord_data_rtk <- read_excel(rtk_data_path) %>% 
+  select(c('site_id', 'latitude', 'longitude')) %>% 
+  rename(
+    lat=latitude,
+    long=longitude
+  )
+
+
   
 #### Function to write the coordinates to a shapefile
 
@@ -68,3 +79,4 @@ points_to_shapefile(coord_data_v1, "1", out_dir)
 points_to_shapefile(coord_data_v2, "2", out_dir)
 points_to_shapefile(coord_data_v3, "3", out_dir)
 points_to_shapefile(coord_data_avg, "AVG", out_dir)
+points_to_shapefile(coord_data_rtk, "RTK", out_dir)

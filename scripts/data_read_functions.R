@@ -30,6 +30,7 @@ fetch_water_checks <- function(meta_path, site_id){
   check_history <- check_history %>% 
     filter(Site_ID == site_id)
   
+  # TODO: Update the select cols as we get more checks.
   select_cols <- c(
     "Site_ID",
     "H20_date_1",

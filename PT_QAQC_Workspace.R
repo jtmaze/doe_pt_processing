@@ -3,7 +3,7 @@
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 # !!!!!
-# !!!! TODO: Implement Anomaly Remover Function
+# TODO: Implement Anomaly Remover Function!!!
 library('tidyverse')
 library('plotly')
 library('glue')
@@ -20,12 +20,12 @@ compiled_path <-'./data/compiled_stage_2.xlsx'
 meta_data_path <- './data/Wetland_well_metadata_1.xlsx'
 status_path <- './data/Post_Processing_Well_Status.xlsx'
 
-# 
-unique_wetland_wells <- read_excel(meta_data_path, sheet="Wetland_and_well_info") %>% 
-  pull('Site_ID') %>% 
-  unique()
 
-print(unique_wetland_wells)
+# unique_wetland_wells <- read_excel(meta_data_path, sheet="Wetland_and_well_info") %>% 
+#   pull('Site_ID') %>% 
+#   unique()
+# 
+# print(unique_wetland_wells)
 
 # Make output dataframe and define columns
 output_data <- tibble(
@@ -53,14 +53,18 @@ output_checks <- tibble(
 # Priority Wetlands -------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-# Sunita: 6_93, 14_612, 5a_582, 14_500, 15_409 and 13_267
+# Sunita: !!!6_93, 14_612, 5a_582, !!!14_500, !!!15_409 and 13_267
+
+# AJ:6_300; !!!6_20; !!!15_409; !!!15_4; 15_268; 14/9_601; 
+# 14/9_527; 14/9_168; !!!14_500; !!!14_115; !!!13_410; 13_274; 
+# 3_34; 3_311; !!!9_332; !!!5_510
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Review with others -------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-# 13_267 # Switched offset when well moved
-# 13_410 # Strangely low stage
+# 13_263 # Switched offset when well moved
+# 13_410 # Strangely low stage, probably good, check AJ photos
 # 15_4 Looks like well isn't equilabrating properly??
 # 3_173 The "bottoming out" depth changed, could be and in well instead of well moving.
 # 5_510 This has to be a groundwater well, or something is seriously wrong
@@ -70,6 +74,12 @@ output_checks <- tibble(
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # I) Site: 13_263 -------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+#4/14/22: While attempting to move well further into wetland 
+# (because location was clearcut- see note from last visit) on 4/14/22, 
+#the well snapped. Came back on 4/15/22 and moved well to a new location deeper 
+#in the wetland (29.8678961, -82.1999974, L to P 214 cm, P to G 168 cm, H20 23 cm).
 
 ## -------- A Read the site data/metadata -----------------
 site <- "13_263"
@@ -129,6 +139,9 @@ offset_vals_use2 <- offsets_to_use2 %>% select(all_of(offset_names_to_use2))
 
 new_offset1 <- offset_vals_use1 %>%  unlist() %>% mean(na.rm = TRUE)
 new_offset2 <- offset_vals_use2 %>%  unlist() %>% mean(na.rm = TRUE)
+# TODO: Check for rain event, and don't use the fieldsheet offset. 
+# !!! Keep continuity in the timeseries vs. fidelity with field PG and PL. 
+new_offset2 <- 0.51
 
 data_full <- data_full %>% 
   # Apply offset #1 prior to April 14th 2022
@@ -150,6 +163,7 @@ data_full <- data_full %>%
       Date >  as.Date("2022-04-16") ~ 0,
       TRUE                          ~ NA_real_
     ),
+    # TODO: Add more detailed notes on the offset change with new well. 
     notes = case_when(
       Date <  as.Date("2022-04-14") ~ "Well moved on Apr 14th 2022. Reliant on one field measurement",
       Date >  as.Date("2022-04-16") ~ NA_character_,
@@ -246,6 +260,9 @@ print(all_offsets)
 # Choose offset "offset_m_2"
 offset_names_to_use <- all_offset_names[all_offset_names == "offset_m_2"]
 offset_dates_to_use <- all_offset_dates[all_offset_dates == "P_G/L_date_2"]
+# offset_names_to_use <- all_offset_names[all_offset_names %in% c("offset_m_2", 'offset_m_3')]
+# offset_dates_to_use <- all_offset_dates[all_offset_dates %in% c("P_G/L_date_2", "P_G/L_date_3")]
+
 offset_cols_to_use  <- c(offset_names_to_use, offset_dates_to_use)
 
 offsets_to_use <- pivot_history %>% 
@@ -253,10 +270,16 @@ offsets_to_use <- pivot_history %>%
 offset_vals_use <- offsets_to_use %>% select(all_of(offset_names_to_use))
 new_offset <- offset_vals_use %>% unlist() %>% mean(na.rm=TRUE)
 
+if (length(offset_names_to_use) > 1) {
+  offset_string <- paste0(offset_names_to_use, collapse = " AND ")
+} else {
+  offset_string <- offset_names_to_use
+}
+
 # Apply the chosen offset to the entire timeseries
 data_full <- data_full %>%
   mutate(
-    offset_version = offset_names_to_use,           
+    offset_version = offset_string,           
     offset_value   = new_offset,            
     revised_depth  = sensor_depth - offset_value,
     flag           = 0,                      
@@ -410,6 +433,7 @@ rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
 ## -------- A Read the site data/metadata -----------------
 # site <- "13_274"
 # data <- site_ts_from_xlsx_sheet(compiled_path, site)
+# NOTE: The well's data points are available on the site map
 
 # --------!!!!! Site 13_274 missing from excel data ---------------------
 
