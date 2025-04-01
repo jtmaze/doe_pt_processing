@@ -14,7 +14,7 @@ source("./scripts/qaqc_functions.R")
 source("./scripts/data_read_functions.R")
 
 # Path to original data containing depth and water depth
-compiled_path <-'./data/compiled_stage_2.xlsx'
+compiled_path <-'./data/compiled_stage_JM.xlsx'
 # Path to wetland well metadata.
 # Contains field measurements for water level and well dimensions 
 meta_data_path <- './data/Wetland_well_metadata_1.xlsx'
