@@ -33,40 +33,49 @@ fetch_water_checks <- function(meta_path, site_id){
   # TODO: Update the select cols as we get more checks.
   select_cols <- c(
     "Site_ID",
-    "H20_date_1",
-    "H20_cm_1",
-    "H20_date_2",
-    "H20_cm_2",
-    "H20_date_3",
-    "H20_cm_3",
-    "H20_date_4",
-    "H20_cm_4",
-    "H20_date_5",
-    "H20_cm_5",
-    "H20_date_6",
-    "H20_cm_6"
+    "Well_install",
+    "H2O_install_cm",
+    "H2O_date_1",
+    "H2O_cm_1",
+    "H2O_date_2",
+    "H2O_cm_2",
+    "H2O_date_3",
+    "H2O_cm_3",
+    "H2O_date_4",
+    "H2O_cm_4",
+    "H2O_date_5",
+    "H2O_cm_5",
+    "H2O_date_6",
+    "H2O_cm_6"
   )
   
   check_history <- check_history %>% select(all_of(select_cols))
   
-  #Ensure the cm cols are numeric and date cols are datetime
-  cm_cols <- grep("^H20_cm_", names(check_history), value = TRUE)
-  date_cols <- grep("^H20_date_", names(check_history), value = TRUE)
+  # Select water depth and date columns
+  cm_cols <- grep("^H2O_cm_", names(check_history), value = TRUE)
+  cm_cols <- c(cm_cols, "H2O_install_cm")
+  date_cols <- grep("^H2O_date_", names(check_history), value = TRUE)
+  date_cols <- c(date_cols, "Well_install")
+
+  # Pivot the data and remformat cols to numeric and Date
   check_history <- check_history %>%
     mutate(across(all_of(cm_cols), ~ as.numeric(.))) %>% 
-    mutate(across(all_of(date_cols), ~ as.POSIXct(., format = "%Y-%m-%d")))
+    mutate(across(all_of(date_cols), ~ as.POSIXct(., format = "%Y-%m-%d"))) %>% 
+    rename(H2O_date_0 = Well_install,
+           H2O_cm_0 = H2O_install_cm
+    )
   
   # Pivot the data from wide to long format
   check_history_long <- check_history %>%
     pivot_longer(
       # Columns to pivot: all H20_date_n and H20_cm_n
-      cols = starts_with("H20_date") | starts_with("H20_cm"),
+      cols = starts_with("H2O_date") | starts_with("H2O_cm"),
       
       # Names pattern to extract the measurement number
       names_to = c(".value", "Measurement_Number"),
       
       # Regular expression to separate into .value and Measurement_Number
-      names_pattern = "H20_(date|cm)_(\\d+)"
+      names_pattern = "H2O_(date|cm)_(\\d+)"
     )
   
   check_history_long <- check_history_long %>% 
@@ -130,7 +139,10 @@ fetch_pivot_history <- function(path, site_id){
     "P_L_cm_3", 
     "P_G/L_date_4", 
     "P_G_cm_4",
-    "P_L_cm_4"
+    "P_L_cm_4",
+    "P_G/L_date_5",
+    "P_G_cm_5",
+    "P_L_cm_5"
   )
   
   P_G_cols <- grep("P_G_cm_", select_cols, value=TRUE)

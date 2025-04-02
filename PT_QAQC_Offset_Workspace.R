@@ -17,7 +17,7 @@ source("./scripts/data_read_functions.R")
 compiled_path <-'./data/compiled_stage_JM.xlsx'
 # Path to wetland well metadata.
 # Contains field measurements for water level and well dimensions 
-meta_data_path <- './data/Wetland_well_metadata_1.xlsx'
+meta_data_path <- './data/Wetland_well_metadata_JM.xlsx'
 status_path <- './data/Post_Processing_Well_Status.xlsx'
 
 
@@ -75,7 +75,7 @@ output_checks <- tibble(
 # I) Site: 13_263 -------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-
+## Notes form the field sheet
 #4/14/22: While attempting to move well further into wetland 
 # (because location was clearcut- see note from last visit) on 4/14/22, 
 #the well snapped. Came back on 4/15/22 and moved well to a new location deeper 
@@ -115,9 +115,10 @@ quick_plot_offset2(all_offsets)
 
 
 ## ------- C Revise water depth -----------------------------------------
-# NOTE: Well was moved deeper use two offsets 
+# NOTES: Well was moved deeper use two offsets 
 # - offset_v1 prior to 2022-04-14
-# - offset_v2 after 2022-04-15
+# - offset_v2 after 2022-04-15 == 0.52
+# !!!
 
 print(all_offsets)
 # PICK OFFSET HERE
@@ -130,18 +131,10 @@ offsets_to_use1 <- pivot_history %>%
 offset_vals_use1 <- offsets_to_use1 %>% select(all_of(offset_names_to_use1))
 
 ### !!!!!!! offset V2 !!!!!!!!!!!!!!!!!
-offset_names_to_use2 <- all_offset_names[all_offset_names == "offset_m_2"]
-offset_dates_to_use2 <- all_offset_dates[all_offset_dates == "P_G/L_date_2"]
-offset_cols_to_use2 <- c(offset_names_to_use2, offset_dates_to_use2)
-offsets_to_use2 <- pivot_history %>% 
-  select(all_of(offset_cols_to_use2))
-offset_vals_use2 <- offsets_to_use2 %>% select(all_of(offset_names_to_use2))
+offset_names_to_use2 <- "Custom for TS continuity"
 
 new_offset1 <- offset_vals_use1 %>%  unlist() %>% mean(na.rm = TRUE)
-new_offset2 <- offset_vals_use2 %>%  unlist() %>% mean(na.rm = TRUE)
-# TODO: Check for rain event, and don't use the fieldsheet offset. 
-# !!! Keep continuity in the timeseries vs. fidelity with field PG and PL. 
-new_offset2 <- 0.51
+new_offset2 <- 0.52
 
 data_full <- data_full %>% 
   # Apply offset #1 prior to April 14th 2022
@@ -159,13 +152,13 @@ data_full <- data_full %>%
       TRUE                          ~ NA_real_
     ),
     flag = case_when(
-      Date <  as.Date("2022-04-14") ~ 1,
+      Date <  as.Date("2022-04-14") ~ 0,
       Date >  as.Date("2022-04-16") ~ 0,
       TRUE                          ~ NA_real_
     ),
     # TODO: Add more detailed notes on the offset change with new well. 
     notes = case_when(
-      Date <  as.Date("2022-04-14") ~ "Well moved on Apr 14th 2022. Reliant on one field measurement",
+      Date <  as.Date("2022-04-14") ~ "Used custom offset after 2022-04-16, ensures continuous timeseries.",
       Date >  as.Date("2022-04-16") ~ NA_character_,
       TRUE                          ~ NA_character_
     ),
@@ -248,7 +241,6 @@ all_offset_cols <- c(all_offset_dates, all_offset_names)
 all_offsets <- pivot_history %>% 
   select(all_of(all_offset_cols))
 quick_plot_offset2(all_offsets)
-
 
 ## ------- C Revise water depth -----------------------------------------
 
@@ -363,13 +355,14 @@ quick_plot_offset2(all_offsets)
 
 ## ------- C Revise water depth -----------------------------------------
 
-# - Just use offset version #1 for the entire timeseries
+# - Just use offset version #2 for the entire timeseries
+#   offset V2 agrees better with field checks and other offsets compared to V1
 print(all_offsets)
 # PICK OFFSET HERE
 ### !!!!!!! offset V1 !!!!!!!!!!!!!!!!!
-# Choose offset "offset_m_1"
-offset_names_to_use <- all_offset_names[all_offset_names == "offset_m_1"]
-offset_dates_to_use <- all_offset_dates[all_offset_dates == "P_G/L_date_1"]
+# Choose offset "offset_m_2"
+offset_names_to_use <- all_offset_names[all_offset_names == "offset_m_2"]
+offset_dates_to_use <- all_offset_dates[all_offset_dates == "P_G/L_date_2"]
 offset_cols_to_use  <- c(offset_names_to_use, offset_dates_to_use)
 
 offsets_to_use <- pivot_history %>% 
@@ -383,8 +376,8 @@ data_full <- data_full %>%
     offset_version = offset_names_to_use,           
     offset_value   = new_offset,            
     revised_depth  = sensor_depth - offset_value,
-    flag           = 2,                      
-    notes          = "Suspiciously low water levels in timeseries. Well is almost never inundated."           
+    flag           = 0,                      
+    notes          = NA_character_          
   )
 
 ## ------- D Plot the data with a revised offset -----------------------
@@ -431,11 +424,104 @@ rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ## -------- A Read the site data/metadata -----------------
-# site <- "13_274"
-# data <- site_ts_from_xlsx_sheet(compiled_path, site)
-# NOTE: The well's data points are available on the site map
+site <- "13_274"
+data <- site_ts_from_xlsx_sheet(compiled_path, site)
+qaqc <- fetch_water_checks(meta_data_path, site) 
+pivot_history <- fetch_pivot_history(meta_data_path, site)
+status <- fetch_post_process_status(status_path, site)
+print(status$Notes)
 
-# --------!!!!! Site 13_274 missing from excel data ---------------------
+## ------ B Explore depth versions -------------------------
+data_full <- calc_stages_from_offsets(data, pivot_history)
+# Select columns to plot
+all_cols <- colnames(data_full)
+depth_cols <- grep('depth', all_cols, value=TRUE)
+
+not_to_plot <- c("sensor_depth")
+ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+print(ts_cols)
+
+# Make plots
+make_site_ts(site_ts=data_full, 
+             y_vars = ts_cols, 
+             qaqc_df = qaqc)
+# Plot checks
+checks <- make_checks_df(data_full, qaqc)
+plot_checks(checks, site)
+# Plot offsets
+all_offset_names <- grep("offset_m_", all_cols, value=TRUE)
+all_offset_dates <- grep("P_G/L_date_", all_cols, value=TRUE)
+all_offset_cols <- c(all_offset_dates, all_offset_names)
+all_offsets <- pivot_history %>% 
+  select(all_of(all_offset_cols))
+quick_plot_offset2(all_offsets)
+
+
+## ------- C Revise water depth -----------------------------------------
+
+# - Just use offset version #2 for the entire timeseries
+#   offset V2 agrees with field checks offset V1 is clearly wrong
+print(all_offsets)
+# PICK OFFSET HERE
+### !!!!!!! offset V1 !!!!!!!!!!!!!!!!!
+# Choose offset "offset_m_2"
+offset_names_to_use <- all_offset_names[all_offset_names == "offset_m_2"]
+offset_dates_to_use <- all_offset_dates[all_offset_dates == "P_G/L_date_2"]
+offset_cols_to_use  <- c(offset_names_to_use, offset_dates_to_use)
+
+offsets_to_use <- pivot_history %>% 
+  select(all_of(offset_cols_to_use))
+offset_vals_use <- offsets_to_use %>% select(all_of(offset_names_to_use))
+new_offset <- offset_vals_use %>% unlist() %>% mean(na.rm=TRUE)
+
+# Apply the chosen offset to the entire timeseries
+data_full <- data_full %>%
+  mutate(
+    offset_version = offset_names_to_use,           
+    offset_value   = new_offset,            
+    revised_depth  = sensor_depth - offset_value,
+    flag           = 0,                      
+    notes          = NA_character_          
+  )
+
+## ------- D Plot the data with a revised offset -----------------------
+
+make_site_ts(site_ts=data_full,
+             y_vars=c("original_depth", "revised_depth"),
+             qaqc)
+
+data_out <- data_full %>% 
+  select(
+    c(
+      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
+      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+    )
+  )
+
+
+checks_final <- make_checks_df(data_out, qaqc)
+plot_checks(checks_final, site)
+
+## ------------ E Join Output clean up environment ------------------
+
+# Add timeseries to output
+data_out <- data_out %>% 
+  select(-c('depth_avg')) 
+output_data <- bind_rows(output_data, data_out)  
+
+# Add checks to output
+checks_final <- checks_final %>%
+  mutate("Site_ID" = site) %>% 
+  rename(field_check_m = chk_m,
+         logger_val_m = logger_date_mean_trimmed)
+output_checks <- bind_rows(output_checks, checks_final)
+
+rm(site, data, qaqc, pivot_history, 
+   status, data_full, data_out, checks_final) 
+rm(offsets_to_use, new_offset, offset_cols_to_use, 
+   offset_dates_to_use, offset_names_to_use, offset_vals_use)
+rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
+   all_offset_names, all_offsets, checks, depth_cols)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # V) Site: 13_410 -------------------------------------------------------
@@ -496,8 +582,8 @@ data_full <- data_full %>%
     offset_version = offset_names_to_use,           
     offset_value   = new_offset,            
     revised_depth  = sensor_depth - offset_value,
-    flag           = 2,                      
-    notes          = "Suspiciously low water levels in timeseries. Well is almost never inundated. Checks are way above"           
+    flag           = 0,                      
+    notes          = NA_character_           
   )
 
 ## ------- D Plot the data with a revised offset -----------------------
@@ -540,7 +626,7 @@ rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
    all_offset_names, all_offsets, checks, depth_cols)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# V) Site: 14/9_168-------------------------------------------------------
+# VI) Site: 14/9_168-------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ## -------- A Read the site data/metadata -----------------
@@ -641,7 +727,7 @@ rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
    all_offset_names, all_offsets, checks, depth_cols)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# VI) Site: 14/9_527-------------------------------------------------------
+# VII) Site: 14/9_527-------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ## -------- A Read the site data/metadata -----------------
@@ -742,7 +828,7 @@ rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
    all_offset_names, all_offsets, checks, depth_cols)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# VII) Site: 14/9_601-------------------------------------------------------
+# VIII) Site: 14/9_601-------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ## -------- A Read the site data/metadata -----------------
@@ -841,7 +927,7 @@ rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
    all_offset_names, all_offsets, checks, depth_cols)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# VIII) Site: 14_115-------------------------------------------------------
+# IX) Site: 14_115-------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ## -------- A Read the site data/metadata -----------------
@@ -896,8 +982,8 @@ data_full <- data_full %>%
     offset_version = offset_names_to_use,           
     offset_value   = new_offset,            
     revised_depth  = sensor_depth - offset_value,
-    flag           = 2,                      
-    notes          = "The water level data is suspiciously low compared to the field measurements"         
+    flag           = 0,                      
+    notes          = NA_character_        
   )
 
 ## ------- D Plot the data with a revised offset -----------------------
@@ -940,7 +1026,7 @@ rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
    all_offset_names, all_offsets, checks, depth_cols)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# IX) Site: 14_15-------------------------------------------------------
+# X) Site: 14_15-------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ## -------- A Read the site data/metadata -----------------
@@ -996,7 +1082,7 @@ data_full <- data_full %>%
     offset_value   = new_offset,            
     revised_depth  = sensor_depth - offset_value,
     flag           = 1,                      
-    notes          = "There's high offset uncertianity. Used V1, but it was noteably lower"         
+    notes          = "There's high offset uncertianity. Used V1 becuase it agrees with field checks, but it was noteably lower"         
   )
 
 ## ------- D Plot the data with a revised offset -----------------------
@@ -1039,7 +1125,7 @@ rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
    all_offset_names, all_offsets, checks, depth_cols)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# X) Site: 14_418-------------------------------------------------------
+# XI) Site: 14_418-------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ## -------- A Read the site data/metadata -----------------
@@ -1078,9 +1164,10 @@ quick_plot_offset2(all_offsets)
 
 print(all_offsets)
 # PICK OFFSET HERE
-### !!!!!!! offset V1 !!!!!!!!!!!!!!!!!
-offset_names_to_use <- all_offset_names[all_offset_names == "offset_m_1"]
-offset_dates_to_use <- all_offset_dates[all_offset_dates == "P_G/L_date_1"]
+### !!!!!!! offset V2 !!!!!!!!!!!!!!!!!
+# Chose offset V2, becuase it matched checks better than V1!
+offset_names_to_use <- all_offset_names[all_offset_names == "offset_m_2"]
+offset_dates_to_use <- all_offset_dates[all_offset_dates == "P_G/L_date_2"]
 offset_cols_to_use  <- c(offset_names_to_use, offset_dates_to_use)
 
 offsets_to_use <- pivot_history %>% 
@@ -1138,7 +1225,7 @@ rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
    all_offset_names, all_offsets, checks, depth_cols)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# XI) Site: 14_500-------------------------------------------------------
+# XII) Site: 14_500-------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ## -------- A Read the site data/metadata -----------------

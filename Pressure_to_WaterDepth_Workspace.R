@@ -29,14 +29,17 @@ for(f in raw_files){
   rm(df)
 }
 
-unique_wetlands <- unique(combined_raw_files$WetlandID)
+unique_wetlands <- unique(combined_raw_files$Site_ID)
+unique_basins <- unique(combined_raw_files$BasinID)
+
 print(unique_wetlands)
+print(unique_basins)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # 3.0 Assign Baro Loggers to the Wetlands -------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-combined_raw_files$BasinID[combined_raw_files$BasinID == '14/9'] <- '14.9'
+combined_raw_files$BasinID[combined_raw_files$BasinID == '14/9' | combined_raw_files$BasinID == 149] <- '14.9'
 
 assign_baro <- function(df) {
   
@@ -65,7 +68,52 @@ assign_baro <- function(df) {
 combined_raw_files <- assign_baro(combined_raw_files)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-## 3.1 Join baro data with Wetland PT data -------------------------------------------------------
+## 3.1 Compile all csvs for sites missing old data  -------------------------------------------------------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+missing_df <- read_csv('./data/compiled_PT.csv') %>% 
+  mutate(WetlandID = as.character(WetlandID),
+         Site_ID = paste(BasinID, WetlandID, sep='_')) %>% 
+  filter(Site_ID == '13_274') %>% 
+  rename(baro_region = region)
+
+combined_raw_files <- bind_rows(combined_raw_files, missing_df)
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+## 3.2 Round the Site_IDs where PTs aren't recording on the hour -------------------------------------------------------
+## NOTE this bug caused several sites to not be processed in the earlier script -------------------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+round_dates_not_on_hour <- function(df) {
+  
+  df$Date <- as.POSIXct(df$Date)
+  # Round the Date column to the nearest hour to match with Baros
+  df <- df %>% 
+    mutate(
+      rounded_time = round_date(Date, unit="hour"), 
+      rounding_delta = as.numeric(difftime(rounded_time, Date, units='mins'))
+    )
+  df$Date <- df$rounded_time
+  
+  # Check the rounding deltas on the PTs
+  # Is too high of a rounding delta problematic?
+  rounding_info <- df %>% 
+    filter(!is.na(PT)) %>% 
+    filter(rounding_delta != 0) %>% 
+    mutate(rounding_delta = round(rounding_delta)) %>% 
+    select(Site_ID, rounding_delta) %>% 
+    distinct()
+  
+  print(rounding_info, n=50)
+  # Remove temporary columns, return the df
+  df <- df %>%  select(-rounded_time, -rounding_delta)
+  return(df)
+}
+
+combined_raw_files <- round_dates_not_on_hour(combined_raw_files)
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+## 3.3 Join baro data with Wetland PT data -------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 baro_data <- read_csv(paste0(raw_dir, 'compiled_baro.csv')) %>% 
@@ -92,6 +140,7 @@ calc_water_height <- function(df) {
 }
 
 compiled_pt_data <- calc_water_height(combined_raw_files)
+
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # 5.0 Collate PG, PL and offset measurements -------------------------------------------------------
@@ -151,6 +200,7 @@ compiled_pt_data <- compiled_pt_data %>%
     depth = sensor_depth - (PL - PG) / 100
   )
 
+
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # 7.0 Bind the latest downloads to the old data  -------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -167,6 +217,9 @@ previous_dfs <- lapply(sheet_names, function(sheet) {
 previous <- bind_rows(previous_dfs)
 
 compiled_pt_data <- bind_rows(compiled_pt_data, previous)
+test <- compiled_pt_data %>% filter(Site == '14_538')
+#%>% 
+  #filter(depth < 3)
   
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # 8.0 Write the processed data  -------------------------------------------------------
