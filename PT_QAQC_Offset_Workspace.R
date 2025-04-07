@@ -14,7 +14,7 @@ source("./scripts/qaqc_functions.R")
 source("./scripts/data_read_functions.R")
 
 # Path to original data containing depth and water depth
-compiled_path <-'./data/compiled_stage_JM.xlsx'
+compiled_path <-'./data/compiled_stage_JM_2.xlsx'
 # Path to wetland well metadata.
 # Contains field measurements for water level and well dimensions 
 meta_data_path <- './data/Wetland_well_metadata_JM.xlsx'
@@ -690,7 +690,7 @@ data_full <- data_full %>%
 ## ------- D Plot the data with a revised offset -----------------------
 
 make_site_ts(site_ts=data_full,
-             y_vars=c("original_depth", "revised_depth"),
+             y_vars=c("revised_depth"),
              qaqc)
 
 data_out <- data_full %>% 
@@ -732,6 +732,7 @@ rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
 
 ## -------- A Read the site data/metadata -----------------
 site <- "14/9_527"
+
 data <- site_ts_from_xlsx_sheet(compiled_path, site)
 qaqc <- fetch_water_checks(meta_data_path, site) 
 pivot_history <- fetch_pivot_history(meta_data_path, site)
@@ -1324,7 +1325,7 @@ rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
    all_offset_names, all_offsets, checks, depth_cols)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# XII) Site: 14_538-------------------------------------------------------
+# XIII) Site: 14_538-------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ## -------- A Read the site data/metadata -----------------
@@ -1340,7 +1341,7 @@ data_full <- calc_stages_from_offsets(data, pivot_history)
 # Select columns to plot
 all_cols <- colnames(data_full)
 depth_cols <- grep('depth', all_cols, value=TRUE)
-not_to_plot <- c("sensor_depth")
+not_to_plot <- c("sensor_depth", "original_depth")
 ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
 print(ts_cols)
 
@@ -1423,7 +1424,7 @@ rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
    all_offset_names, all_offsets, checks, depth_cols)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# XIII) Site: 14_610-------------------------------------------------------
+# XIV) Site: 14_610-------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ## -------- A Read the site data/metadata -----------------
@@ -1472,8 +1473,7 @@ offset_vals_use1 <- offsets_to_use1 %>% select(all_of(offset_names_to_use1))
 
 ### !!!!!!! offset V2 !!!!!!!!!!!!!!!!!
 new_offset1 <- offset_vals_use1 %>%  unlist() %>% mean(na.rm = TRUE)
-# offset_names_to_use2 <- "estimated"
-# new_offset2 <- 4.42
+
 
 data_full <- data_full %>% 
   # Apply offset #1 prior to October 18th 2022 and after June 5th 2023
@@ -1542,7 +1542,7 @@ rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
    all_offset_names, all_offsets, checks, depth_cols)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# XIV) Site: 14_612-------------------------------------------------------
+# XV) Site: 14_612-------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ## -------- A Read the site data/metadata -----------------
@@ -1641,7 +1641,7 @@ rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
    all_offset_names, all_offsets, checks, depth_cols)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# XV) Site: 14_616-------------------------------------------------------
+# XVI) Site: 14_616-------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ## -------- A Read the site data/metadata -----------------
@@ -1741,7 +1741,7 @@ rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
    all_offset_names, all_offsets, checks, depth_cols)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# XVI) Site: 15_268-------------------------------------------------------
+# XVIII) Site: 15_268-------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ## -------- A Read the site data/metadata -----------------
@@ -1797,8 +1797,8 @@ data_full <- data_full %>%
     offset_version = offset_names_to_use,           
     offset_value   = new_offset,            
     revised_depth  = sensor_depth - offset_value,
-    flag           = 1,                      
-    notes          = "Limitted field measurements for QAQC. High uncertianty for offset"    
+    flag           = 0,                      
+    notes          = NA_character_  
   )
 
 ## ------- D Plot the data with a revised offset -----------------------
@@ -1841,7 +1841,7 @@ rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
    all_offset_names, all_offsets, checks, depth_cols)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# XVII) Site: 15_4-------------------------------------------------------
+# XIX) Site: 15_4-------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ## -------- A Read the site data/metadata -----------------
@@ -1958,7 +1958,7 @@ rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
    all_offset_names, all_offsets, checks, depth_cols)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# XVIII) Site: 15_409-------------------------------------------------------
+# XX) Site: 15_409-------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ## -------- A Read the site data/metadata -----------------
@@ -2014,8 +2014,8 @@ data_full <- data_full %>%
     offset_version = offset_names_to_use,           
     offset_value   = new_offset,            
     revised_depth  = sensor_depth - offset_value,
-    flag           = 1,                      
-    notes          = "High offset uncertianty. Offset v1 ~10 cm below subsequent offsets."
+    flag           = 0,                      
+    notes          = NA_character_
   )
 
 ## ------- D Plot the data with a revised offset -----------------------
@@ -2058,7 +2058,7 @@ rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
    all_offset_names, all_offsets, checks, depth_cols)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# XIX) Site: 15_516-------------------------------------------------------
+# XXI) Site: 15_516-------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ## -------- A Read the site data/metadata -----------------
@@ -2158,7 +2158,7 @@ rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
    all_offset_names, all_offsets, checks, depth_cols)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# XX) Site: 3_173-------------------------------------------------------
+# XXII) Site: 3_173-------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ## -------- A Read the site data/metadata -----------------
@@ -2258,7 +2258,7 @@ rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
    all_offset_names, all_offsets, checks, depth_cols)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# XXI) Site: 3_21-------------------------------------------------------
+# XXIII) Site: 3_21-------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ## -------- A Read the site data/metadata -----------------
@@ -2358,7 +2358,7 @@ rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
    all_offset_names, all_offsets, checks, depth_cols)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# XXII) Site: 3_23-------------------------------------------------------
+# XXIV) Site: 3_23-------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ## -------- A Read the site data/metadata -----------------
@@ -2457,7 +2457,7 @@ rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
    all_offset_names, all_offsets, checks, depth_cols)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# XXIII) Site: 3_244-------------------------------------------------------
+# XXV) Site: 3_244-------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ## -------- A Read the site data/metadata -----------------
@@ -2556,7 +2556,7 @@ rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
    all_offset_names, all_offsets, checks, depth_cols)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# XXIV) Site: 3_311-------------------------------------------------------
+# XXVI) Site: 3_311-------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ## -------- A Read the site data/metadata -----------------
@@ -2655,7 +2655,7 @@ rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
    all_offset_names, all_offsets, checks, depth_cols)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# XXV) Site: 3_34-------------------------------------------------------
+# XXVII) Site: 3_34-------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ## -------- A Read the site data/metadata -----------------
@@ -2755,7 +2755,7 @@ rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
    all_offset_names, all_offsets, checks, depth_cols)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# XXVI) Site: 3_638-------------------------------------------------------
+# XXVIII) Site: 3_638-------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ## -------- A Read the site data/metadata -----------------
@@ -2854,7 +2854,7 @@ rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
    all_offset_names, all_offsets, checks, depth_cols)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# XXVII) Site: 5_161-------------------------------------------------------
+# XXIX) Site: 5_161-------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ## -------- A Read the site data/metadata -----------------
@@ -2953,7 +2953,7 @@ rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
    all_offset_names, all_offsets, checks, depth_cols)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# XXVIII) Site: 5_321-------------------------------------------------------
+# XXX) Site: 5_321-------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ## -------- A Read the site data/metadata -----------------
@@ -3053,7 +3053,7 @@ rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
 
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# XXVIII) Site: 5_510-------------------------------------------------------
+# XXXI) Site: 5_510-------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ## -------- A Read the site data/metadata -----------------
@@ -3108,8 +3108,8 @@ data_full <- data_full %>%
     offset_version = offset_names_to_use,           
     offset_value   = new_offset,            
     revised_depth  = sensor_depth - offset_value,
-    flag           = 1,                      
-    notes          = "Wide variability in offset values. With only one solid QAQC measurement."
+    flag           = 0,                      
+    notes          = NA_character_
   )
 
 ## ------- D Plot the data with a revised offset -----------------------
@@ -3152,19 +3152,107 @@ rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
    all_offset_names, all_offsets, checks, depth_cols)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# XXIX) Site: 5_546-------------------------------------------------------
+# XXXII) Site: 5_546-------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ## -------- A Read the site data/metadata -----------------
-# site <- "5_546"
-# data <- site_ts_from_xlsx_sheet(compiled_path, site)
+site <- "5_546"
+data <- site_ts_from_xlsx_sheet(compiled_path, site)
+qaqc <- fetch_water_checks(meta_data_path, site) 
+pivot_history <- fetch_pivot_history(meta_data_path, site)
+status <- fetch_post_process_status(status_path, site)
+print(status$Notes)
 
+## ------ B Explore depth versions -------------------------
+data_full <- calc_stages_from_offsets(data, pivot_history)
+# Select columns to plot
+all_cols <- colnames(data_full)
+depth_cols <- grep('depth', all_cols, value=TRUE)
+not_to_plot <- c("sensor_depth")
+ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+print(ts_cols)
 
-# ----- !!!! Site 5_546 not in compiled wetland stage 2 !!! ----------
+# Make plots
+make_site_ts(site_ts=data_full, 
+             y_vars = ts_cols, 
+             qaqc_df = qaqc)
+# Plot checks
+checks <- make_checks_df(data_full, qaqc)
+plot_checks(checks, site)
+# Plot offsets
+all_offset_names <- grep("offset_m_", all_cols, value=TRUE)
+all_offset_dates <- grep("P_G/L_date_", all_cols, value=TRUE)
+all_offset_cols <- c(all_offset_dates, all_offset_names)
+all_offsets <- pivot_history %>% 
+  select(all_of(all_offset_cols))
+quick_plot_offset2(all_offsets)
+
+## ------- C Revise water depth -----------------------------------------
+
+print(all_offsets)
+# PICK OFFSET HERE
+### !!!!!!! offset V1 !!!!!!!!!!!!!!!!!
+offset_names_to_use <- all_offset_names[all_offset_names == "offset_m_1"]
+offset_dates_to_use <- all_offset_dates[all_offset_dates == "P_G/L_date_1"]
+offset_cols_to_use  <- c(offset_names_to_use, offset_dates_to_use)
+
+offsets_to_use <- pivot_history %>% 
+  select(all_of(offset_cols_to_use))
+offset_vals_use <- offsets_to_use %>% select(all_of(offset_names_to_use))
+new_offset <- offset_vals_use %>% unlist() %>% mean(na.rm=TRUE)
+
+# Apply the chosen offset to the entire timeseries
+data_full <- data_full %>%
+  mutate(
+    offset_version = offset_names_to_use,           
+    offset_value   = new_offset,            
+    revised_depth  = sensor_depth - offset_value,
+    flag           = 0,                      
+    notes          = NA_character_
+  )
+
+## ------- D Plot the data with a revised offset -----------------------
+
+make_site_ts(site_ts=data_full,
+             y_vars=c("original_depth", "revised_depth"),
+             qaqc)
+
+data_out <- data_full %>% 
+  select(
+    c(
+      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
+      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+    )
+  )
+
+checks_final <- make_checks_df(data_out, qaqc)
+plot_checks(checks_final, site)
+
+## ------------ E Join Output clean up environment ------------------
+
+# Add timeseries to output
+data_out <- data_out %>% 
+  select(-c('depth_avg')) 
+output_data <- bind_rows(output_data, data_out)  
+
+# Add checks to output
+checks_final <- checks_final %>%
+  mutate("Site_ID" = site) %>% 
+  rename(field_check_m = chk_m,
+         logger_val_m = logger_date_mean_trimmed)
+output_checks <- bind_rows(output_checks, checks_final)
+
+rm(site, data, qaqc, pivot_history, 
+   status, data_full, data_out, checks_final) 
+
+rm(offsets_to_use, new_offset, offset_cols_to_use, 
+   offset_dates_to_use, offset_names_to_use, offset_vals_use)
+rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
+   all_offset_names, all_offsets, checks, depth_cols)
 
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# XXX) Site: 5_560-------------------------------------------------------
+# XXXIII) Site: 5_560-------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ## -------- A Read the site data/metadata -----------------
@@ -3264,7 +3352,7 @@ rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
    all_offset_names, all_offsets, checks, depth_cols)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# XXXI) Site: 5_573-------------------------------------------------------
+# XXXIV) Site: 5_573-------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ## -------- A Read the site data/metadata -----------------
@@ -3320,8 +3408,8 @@ data_full <- data_full %>%
     offset_version = offset_names_to_use,           
     offset_value   = new_offset,            
     revised_depth  = sensor_depth - offset_value,
-    flag           = 1,                      
-    notes          = "Wide variability in offset values. Sticking with offset v1"
+    flag           = 0,                      
+    notes          = NA_character_
   )
 
 ## ------- D Plot the data with a revised offset -----------------------
@@ -3364,7 +3452,7 @@ rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
    all_offset_names, all_offsets, checks, depth_cols)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# XXXII) Site: 5_597 -------------------------------------------------------
+# XXXV) Site: 5_597 -------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ## -------- A Read the site data/metadata -----------------
@@ -3465,7 +3553,7 @@ rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
 
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# XXXIII) Site: 5a_550 -------------------------------------------------------
+# XXXVI) Site: 5a_550 -------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ## -------- A Read the site data/metadata -----------------
@@ -3565,7 +3653,7 @@ rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
    all_offset_names, all_offsets, checks, depth_cols)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# XXXIV) Site: 5a_582 -------------------------------------------------------
+# XXXVII) Site: 5a_582 -------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ## -------- A Read the site data/metadata -----------------
@@ -3665,7 +3753,7 @@ rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
    all_offset_names, all_offsets, checks, depth_cols)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# XXXV) Site: 5a_598 -------------------------------------------------------
+# XXXVIII) Site: 5a_598 -------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ## -------- A Read the site data/metadata -----------------
@@ -3765,7 +3853,7 @@ rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
    all_offset_names, all_offsets, checks, depth_cols)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# XXXVI) Site: 6_20-------------------------------------------------------
+# XXXIX Site: 6_20-------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ## -------- A Read the site data/metadata -----------------
@@ -3821,8 +3909,8 @@ data_full <- data_full %>%
     offset_version = offset_names_to_use,           
     offset_value   = new_offset,            
     revised_depth  = sensor_depth - offset_value,
-    flag           = 1,                      
-    notes          = "Only one water level measurement to QAQC offset"
+    flag           = 0,                      
+    notes          = NA_character_
   )
 
 ## ------- D Plot the data with a revised offset -----------------------
@@ -3865,7 +3953,7 @@ rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
    all_offset_names, all_offsets, checks, depth_cols)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# XXXVII) Site: 6_300-------------------------------------------------------
+# XL) Site: 6_300-------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ## -------- A Read the site data/metadata -----------------
@@ -3921,8 +4009,8 @@ data_full <- data_full %>%
     offset_version = offset_names_to_use,           
     offset_value   = new_offset,            
     revised_depth  = sensor_depth - offset_value,
-    flag           = 1,                      
-    notes          = "High offset uncertianity used V1, which was in the middle."
+    flag           = 0,                      
+    notes          = NA_character_
   )
 
 ## ------- D Plot the data with a revised offset -----------------------
@@ -3965,7 +4053,7 @@ rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
    all_offset_names, all_offsets, checks, depth_cols)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# XXXVIII) Site: 6_629-------------------------------------------------------
+# XLI Site: 6_629-------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ## -------- A Read the site data/metadata -----------------
@@ -4065,7 +4153,7 @@ rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
    all_offset_names, all_offsets, checks, depth_cols)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# XXXIX) Site: 6_93-------------------------------------------------------
+# XLII) Site: 6_93-------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ## -------- A Read the site data/metadata -----------------
@@ -4121,8 +4209,8 @@ data_full <- data_full %>%
     offset_version = offset_names_to_use,           
     offset_value   = new_offset,            
     revised_depth  = sensor_depth - offset_value,
-    flag           = 1,                      
-    notes          = "High offset uncertianity. Used offset #1."
+    flag           = 0,                      
+    notes          = NA_character_
   )
 
 ## ------- D Plot the data with a revised offset -----------------------

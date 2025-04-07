@@ -158,6 +158,7 @@ plot_checks <- function(checks_df, site){
     scale_color_gradient(low='green', high="purple") +
     geom_hline(yintercept=0, color="tomato", linewidth=2) +
     theme_bw() + 
+    ylim(-0.3, 0.3) +
     labs(title = paste0("Checking Site: ", site),
          y = "Field - Logger Water Level (m)",
          x = "Dataset Version",

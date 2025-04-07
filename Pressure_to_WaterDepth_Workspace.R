@@ -7,7 +7,6 @@ library(writexl)
 library(openxlsx)
 
 raw_dir <- './data/raw_files_F24-W25/'
-
 raw_files <- list.files(path=raw_dir, pattern='LL.csv', full.names=TRUE)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -49,6 +48,7 @@ assign_baro <- function(df) {
   
   # Assign baros to the dataframe
   df <- df %>% 
+    mutate(BasinID = as.character(BasinID)) %>% 
     mutate(baro_region = case_when(
       BasinID %in% north_ids ~ "N",
       BasinID %in% south_ids ~ "S", 
@@ -70,11 +70,11 @@ combined_raw_files <- assign_baro(combined_raw_files)
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ## 3.1 Compile all csvs for sites missing old data  -------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
+missing_sites = c('13_274', '5_546')
 missing_df <- read_csv('./data/compiled_PT.csv') %>% 
   mutate(WetlandID = as.character(WetlandID),
          Site_ID = paste(BasinID, WetlandID, sep='_')) %>% 
-  filter(Site_ID == '13_274') %>% 
+  filter(Site_ID %in% missing_sites) %>% 
   rename(baro_region = region)
 
 combined_raw_files <- bind_rows(combined_raw_files, missing_df)
@@ -141,7 +141,6 @@ calc_water_height <- function(df) {
 
 compiled_pt_data <- calc_water_height(combined_raw_files)
 
-
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # 5.0 Collate PG, PL and offset measurements -------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -195,11 +194,12 @@ compiled_pt_data <- compiled_pt_data %>%
 
 compiled_pt_data <- compiled_pt_data %>% 
   mutate(
-    PG = as.numeric(PG),
-    PL = as.numeric(PL),
-    depth = sensor_depth - (PL - PG) / 100
-  )
-
+    # NOTE: if PG and PL aren't filled, I replace them with zero.
+    # This does not matter since we no longer apply dynamic PG/PL measurements that change with time.
+    PG = coalesce(as.numeric(PG), 0),
+    PL = coalesce(as.numeric(PL), 0)
+    ) %>% 
+  mutate(depth = sensor_depth - (PL - PG) / 100)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # 7.0 Bind the latest downloads to the old data  -------------------------------------------------------
@@ -215,17 +215,50 @@ previous_dfs <- lapply(sheet_names, function(sheet) {
   read_excel(previous_data_path, sheet=sheet)
 })
 previous <- bind_rows(previous_dfs)
+rm(previous_dfs)
+# NOTE: I'm recalculating water depth for pre-existing data, 
+# becuase there was a suspect baro measurement from January 7th 2022 until 
+# April 9th 2022 for sites using the South baro logger.
 
-compiled_pt_data <- bind_rows(compiled_pt_data, previous)
-test <- compiled_pt_data %>% filter(Site == '14_538')
-#%>% 
-  #filter(depth < 3)
+previous <- previous %>% 
+  select(c("Date", "Site", "BasinID", "PT", "PG", "PL")) %>% 
+  rename(Site_ID = Site)
+
+previous <- assign_baro(previous)
+
+# previous <- previous %>% 
+#   mutate(
+#     baro_region = case_when(
+#       Date >= as.Date('2022-01-27') & Date <= as.Date('2022-04-09') ~ "N",
+#       TRUE ~ baro_region
+#     )
+#   )
+
+previous <- left_join(
+  previous, 
+  baro_data, 
+  by=c('baro_region', 'Date'),
+  relationship = 'many-to-many'
+)
+
+previous <- calc_water_height(previous) 
+
+previous <- previous %>% 
+  mutate(
+    depth = sensor_depth - (PL - PG) / 100
+  ) %>% 
+  select(-baro_region) %>% 
+  rename(Site = Site_ID)
+
+
+compiled_pt_data <- bind_rows(compiled_pt_data, previous) %>% 
+  filter(depth < 3)
   
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # 8.0 Write the processed data  -------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 sheet_list <- split(compiled_pt_data, compiled_pt_data$Site)
-write.xlsx(sheet_list, "./data/compiled_stage_JM.xlsx")
+write.xlsx(sheet_list, "./data/compiled_stage_JM_2.xlsx")
 
 
