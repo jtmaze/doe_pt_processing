@@ -70,7 +70,7 @@ combined_raw_files <- assign_baro(combined_raw_files)
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ## 3.1 Compile all csvs for sites missing old data  -------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-missing_sites = c('13_274', '5_546')
+missing_sites = c('13_274', '5_546', '7_622')
 missing_df <- read_csv('./data/compiled_PT.csv') %>% 
   mutate(WetlandID = as.character(WetlandID),
          Site_ID = paste(BasinID, WetlandID, sep='_')) %>% 
@@ -259,6 +259,6 @@ compiled_pt_data <- bind_rows(compiled_pt_data, previous) %>%
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 sheet_list <- split(compiled_pt_data, compiled_pt_data$Site)
-write.xlsx(sheet_list, "./data/compiled_stage_JM_2.xlsx")
+write.xlsx(sheet_list, "./data/compiled_stage_JM.xlsx")
 
 

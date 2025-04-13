@@ -2,8 +2,6 @@
 # Libraries & File Paths -------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-# !!!!!
-# TODO: Implement Anomaly Remover Function!!!
 library('tidyverse')
 library('plotly')
 library('glue')
@@ -60,18 +58,6 @@ output_checks <- tibble(
 # 3_34; 3_311; !!!9_332; !!!5_510
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# Review with others -------------------------------------------------------
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-# 13_263 # Switched offset when well moved
-# 13_410 # Strangely low stage, probably good, check AJ photos
-# 15_4 Looks like well isn't equilabrating properly??
-# 3_173 The "bottoming out" depth changed, could be and in well instead of well moving.
-# 5_510 This has to be a groundwater well, or something is seriously wrong
-# 6_20 Agreement got worse after revision
-# 9_332 No clue what's happening here. Stitched hydrograph together with made up offset on August 9th 2023
-
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # I) Site: 13_263 -------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -115,10 +101,6 @@ quick_plot_offset2(all_offsets)
 
 
 ## ------- C Revise water depth -----------------------------------------
-# NOTES: Well was moved deeper use two offsets 
-# - offset_v1 prior to 2022-04-14
-# - offset_v2 after 2022-04-15 == 0.52
-# !!!
 
 print(all_offsets)
 # PICK OFFSET HERE
@@ -131,42 +113,53 @@ offsets_to_use1 <- pivot_history %>%
 offset_vals_use1 <- offsets_to_use1 %>% select(all_of(offset_names_to_use1))
 
 ### !!!!!!! offset V2 !!!!!!!!!!!!!!!!!
-offset_names_to_use2 <- "Custom for TS continuity"
+offset_naems_to_use2 <- "Custom1"
+### !!!!!!! offset V3 !!!!!!!!!!!!!!!!!
+offset_names_to_use3 <- "Custom2"
 
 new_offset1 <- offset_vals_use1 %>%  unlist() %>% mean(na.rm = TRUE)
-new_offset2 <- 0.52
+new_offset2 <- 0.53
+new_offset3 <- 0.46
 
 data_full <- data_full %>% 
-  # Apply offset #1 prior to April 14th 2022
-  # Apply offset #2 after April 15th 2022
-  # Delete data in between
+  # Apply offset #1 prior to January 15th 2022
+  # Apply offset #2 between January 15th 2022 and April 15th 2022
+  # Apply offset #3 after April 16th 2022
+  # Delete data in these ranges [January 15th 2022-January 16th 2022] AND [April 14th 2022 - April 16th 2022]
+  filter(
+    !(Date >= as.Date("2022-01-15") & Date <= as.Date("2022-01-16")),
+    !(Date >= as.Date("2022-04-14") & Date <= as.Date("2022-04-16"))
+  ) %>%
   mutate(
     offset_version = case_when(
-      Date <  as.Date("2022-04-14") ~ offset_names_to_use1,
-      Date >  as.Date("2022-04-16") ~ offset_names_to_use2,
-      TRUE                          ~ NA_character_  # "Between" dates get NA 
+      Date < as.Date("2022-01-15") ~ offset_names_to_use1,  # offset #1
+      Date >= as.Date("2022-01-17") & Date <= as.Date("2022-04-13") ~ offset_naems_to_use2,  # offset #2
+      Date >= as.Date("2022-04-17") ~ offset_names_to_use3,  # offset #3
+      TRUE ~ NA_character_
     ),
     offset_value = case_when(
-      Date <  as.Date("2022-04-14") ~ new_offset1,
-      Date >  as.Date("2022-04-16") ~ new_offset2,
-      TRUE                          ~ NA_real_
+      Date < as.Date("2022-01-15") ~ new_offset1,
+      Date >= as.Date("2022-01-17") & Date <= as.Date("2022-04-13") ~ new_offset2,
+      Date >= as.Date("2022-04-17") ~ new_offset3,
+      TRUE ~ NA_real_
     ),
     flag = case_when(
-      Date <  as.Date("2022-04-14") ~ 0,
-      Date >  as.Date("2022-04-16") ~ 0,
-      TRUE                          ~ NA_real_
-    ),
-    # TODO: Add more detailed notes on the offset change with new well. 
+      Date < as.Date("2022-01-15") ~ 0,
+      Date >= as.Date("2022-01-17") & Date <= as.Date("2022-04-13") ~ 1,
+      Date >= as.Date("2022-04-17") ~ 0,
+    ),  # or vary by range if desired
     notes = case_when(
-      Date <  as.Date("2022-04-14") ~ "Used custom offset after 2022-04-16, ensures continuous timeseries.",
-      Date >  as.Date("2022-04-16") ~ NA_character_,
-      TRUE                          ~ NA_character_
+      Date < as.Date("2022-01-15") ~ "Original Well",
+      Date >= as.Date("2022-01-17") & Date <= as.Date("2022-04-13") ~ "PT Knocked over in wetland",
+      Date >= as.Date("2022-04-17") ~ "New Well",
+      TRUE ~ NA_character_
     ),
     revised_depth = sensor_depth - offset_value
   )
 
 ## ------- D Plot the data with a revised offset -----------------------
 
+data_full <- anomaly_remover(data_full, revised_depth_col='revised_depth')
 make_site_ts(site_ts=data_full,
              y_vars=c("original_depth", "revised_depth"),
              qaqc)
@@ -1281,8 +1274,8 @@ data_full <- data_full %>%
     offset_version = offset_names_to_use,           
     offset_value   = new_offset,            
     revised_depth  = sensor_depth - offset_value,
-    flag           = 1,                      
-    notes          = "High offset uncertianity. Used V1, but much smaller than other measurements."     
+    flag           = 0,                      
+    notes          = NA_character_   
   )
 
 ## ------- D Plot the data with a revised offset -----------------------
@@ -3293,8 +3286,8 @@ print(all_offsets)
 
 # PICK OFFSET HERE
 ### !!!!!!! offset V1 !!!!!!!!!!!!!!!!!
-offset_names_to_use <- all_offset_names[all_offset_names == "offset_m_1"]
-offset_dates_to_use <- all_offset_dates[all_offset_dates == "P_G/L_date_1"]
+offset_names_to_use <- all_offset_names[all_offset_names == "offset_m_3"]
+offset_dates_to_use <- all_offset_dates[all_offset_dates == "P_G/L_date_3"]
 offset_cols_to_use  <- c(offset_names_to_use, offset_dates_to_use)
 
 offsets_to_use <- pivot_history %>% 
@@ -3308,8 +3301,8 @@ data_full <- data_full %>%
     offset_version = offset_names_to_use,           
     offset_value   = new_offset,            
     revised_depth  = sensor_depth - offset_value,
-    flag           = 1,                      
-    notes          = "Wide variability in offset values. Sticking with offset v1"
+    flag           = 0,                      
+    notes          = NA_character_
   )
 
 ## ------- D Plot the data with a revised offset -----------------------
@@ -4253,7 +4246,7 @@ rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
    all_offset_names, all_offsets, checks, depth_cols)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# XL) Site: 6a_17-------------------------------------------------------
+# XLIII) Site: 6a_17-------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ## -------- A Read the site data/metadata -----------------
@@ -4294,8 +4287,8 @@ print(all_offsets)
 
 # PICK OFFSET HERE
 ### !!!!!!! offset V3 !!!!!!!!!!!!!!!!!
-offset_names_to_use <- all_offset_names[all_offset_names == "offset_m_3"]
-offset_dates_to_use <- all_offset_dates[all_offset_dates == "P_G/L_date_3"]
+offset_names_to_use <- all_offset_names[all_offset_names == "offset_m_1"]
+offset_dates_to_use <- all_offset_dates[all_offset_dates == "P_G/L_date_1"]
 offset_cols_to_use  <- c(offset_names_to_use, offset_dates_to_use)
 
 offsets_to_use <- pivot_history %>% 
@@ -4309,8 +4302,8 @@ data_full <- data_full %>%
     offset_version = offset_names_to_use,           
     offset_value   = new_offset,            
     revised_depth  = sensor_depth - offset_value,
-    flag           = 1,                      
-    notes          = "High offset uncertianity, offset #1 much lower. Used v3 becuase it matched checks."
+    flag           = 0,                      
+    notes          = NA_character_
   )
 
 ## ------- D Plot the data with a revised offset -----------------------
@@ -4353,7 +4346,7 @@ rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
    all_offset_names, all_offsets, checks, depth_cols)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# XLI) Site: 6a_530-------------------------------------------------------
+# XLIV) Site: 6a_530-------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ## -------- A Read the site data/metadata -----------------
@@ -4453,7 +4446,7 @@ rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
    all_offset_names, all_offsets, checks, depth_cols)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# XLII) Site: 7_243-------------------------------------------------------
+# XLV) Site: 7_243-------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ## -------- A Read the site data/metadata -----------------
@@ -4493,7 +4486,7 @@ quick_plot_offset2(all_offsets)
 print(all_offsets)
 
 # PICK OFFSET HERE
-### !!!!!!! offset V1 !!!!!!!!!!!!!!!!!
+### !!!!!!! offset V3 !!!!!!!!!!!!!!!!!
 offset_names_to_use <- all_offset_names[all_offset_names == "offset_m_3"]
 offset_dates_to_use <- all_offset_dates[all_offset_dates == "P_G/L_date_3"]
 offset_cols_to_use  <- c(offset_names_to_use, offset_dates_to_use)
@@ -4553,7 +4546,7 @@ rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
    all_offset_names, all_offsets, checks, depth_cols)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# XLIII) Site: 7_341-------------------------------------------------------
+# XLVI) Site: 7_341-------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ## -------- A Read the site data/metadata -----------------
@@ -4653,17 +4646,107 @@ rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
    all_offset_names, all_offsets, checks, depth_cols)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# XLIV) Site: 7_622-------------------------------------------------------
+# XLVII) Site: 7_622-------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ## -------- A Read the site data/metadata -----------------
-# site <- "7_622"
-# data <- site_ts_from_xlsx_sheet(compiled_path, site)
+site <- "7_622"
+data <- site_ts_from_xlsx_sheet(compiled_path, site)
+qaqc <- fetch_water_checks(meta_data_path, site) 
+pivot_history <- fetch_pivot_history(meta_data_path, site)
+status <- fetch_post_process_status(status_path, site)
+print(status$Notes)
 
-# ----- !!!! Site 7_622 not in compiled wetland stage 2 !!! ----------
+## ------ B Explore depth versions -------------------------
+data_full <- calc_stages_from_offsets(data, pivot_history)
+# Select columns to plot
+all_cols <- colnames(data_full)
+depth_cols <- grep('depth', all_cols, value=TRUE)
+not_to_plot <- c("sensor_depth")
+ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+print(ts_cols)
+
+# Make plots
+make_site_ts(site_ts=data_full, 
+             y_vars = ts_cols, 
+             qaqc_df = qaqc)
+# Plot checks
+checks <- make_checks_df(data_full, qaqc)
+plot_checks(checks, site)
+# Plot offsets
+all_offset_names <- grep("offset_m_", all_cols, value=TRUE)
+all_offset_dates <- grep("P_G/L_date_", all_cols, value=TRUE)
+all_offset_cols <- c(all_offset_dates, all_offset_names)
+all_offsets <- pivot_history %>% 
+  select(all_of(all_offset_cols))
+quick_plot_offset2(all_offsets)
+
+## ------- C Revise water depth -----------------------------------------
+
+print(all_offsets)
+
+# PICK OFFSET HERE
+### !!!!!!! offset V1 !!!!!!!!!!!!!!!!!
+offset_names_to_use <- all_offset_names[all_offset_names == "offset_m_1"]
+offset_dates_to_use <- all_offset_dates[all_offset_dates == "P_G/L_date_1"]
+offset_cols_to_use  <- c(offset_names_to_use, offset_dates_to_use)
+
+offsets_to_use <- pivot_history %>% 
+  select(all_of(offset_cols_to_use))
+offset_vals_use <- offsets_to_use %>% select(all_of(offset_names_to_use))
+new_offset <- offset_vals_use %>% unlist() %>% mean(na.rm=TRUE)
+
+# Apply the chosen offset to the entire timeseries
+data_full <- data_full %>%
+  mutate(
+    offset_version = offset_names_to_use,           
+    offset_value   = new_offset,            
+    revised_depth  = sensor_depth - offset_value,
+    flag           = 0,                      
+    notes          = NA_character_
+  )
+
+## ------- D Plot the data with a revised offset -----------------------
+
+make_site_ts(site_ts=data_full,
+             y_vars=c("original_depth", "revised_depth"),
+             qaqc)
+
+data_out <- data_full %>% 
+  select(
+    c(
+      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
+      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+    )
+  )
+
+checks_final <- make_checks_df(data_out, qaqc)
+plot_checks(checks_final, site)
+
+## ------------ E Join Output clean up environment ------------------
+
+# Add timeseries to output
+data_out <- data_out %>% 
+  select(-c('depth_avg')) 
+output_data <- bind_rows(output_data, data_out)  
+
+# Add checks to output
+checks_final <- checks_final %>%
+  mutate("Site_ID" = site) %>% 
+  rename(field_check_m = chk_m,
+         logger_val_m = logger_date_mean_trimmed)
+output_checks <- bind_rows(output_checks, checks_final)
+
+rm(site, data, qaqc, pivot_history, 
+   status, data_full, data_out, checks_final) 
+
+rm(offsets_to_use, new_offset, offset_cols_to_use, 
+   offset_dates_to_use, offset_names_to_use, offset_vals_use)
+rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
+   all_offset_names, all_offsets, checks, depth_cols)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# XLV) Site: 7_626-------------------------------------------------------
+# XLVIII) Site: 7_626-------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ## -------- A Read the site data/metadata -----------------
@@ -4764,7 +4847,7 @@ rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
    all_offset_names, all_offsets, checks, depth_cols)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# XLVI) Site: 9_332-------------------------------------------------------
+# XLIX) Site: 9_332-------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ## -------- A Read the site data/metadata -----------------
@@ -4815,7 +4898,9 @@ new_offset1 <- offset_vals_use1 %>%  unlist() %>% mean(na.rm = TRUE)
 
 ### !!!!!!! Needed to find new offset !!!!!!!!!!!!!!!!!
 offset_names_to_use2 <- "Guessed offset from TS differences"
-new_offset2 <- -0.14
+new_offset2 <- -0.13
+new_offset3 <- "TBD" #Use after Nov 10th
+new_offset4 <- "TBD2" # Use after Apr 24th 2024
 
 # Apply the chosen offset to the entire timeseries
 data_full <- data_full %>% 
@@ -4884,7 +4969,7 @@ rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
    all_offset_names, all_offsets, checks, depth_cols)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# XLVII) Site: 9_439-------------------------------------------------------
+# L) Site: 9_439-------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ## -------- A Read the site data/metadata -----------------
@@ -4985,7 +5070,7 @@ rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
    all_offset_names, all_offsets, checks, depth_cols)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# XLVIII) Site: 9_508-------------------------------------------------------
+# LI) Site: 9_508-------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ## -------- A Read the site data/metadata -----------------
@@ -5027,8 +5112,8 @@ print(all_offsets)
 
 # PICK OFFSET HERE
 ### !!!!!!! offset V1 !!!!!!!!!!!!!!!!!
-offset_names_to_use <- all_offset_names[all_offset_names == "offset_m_1"]
-offset_dates_to_use <- all_offset_dates[all_offset_dates == "P_G/L_date_1"]
+offset_names_to_use <- all_offset_names[all_offset_names == "offset_m_3"]
+offset_dates_to_use <- all_offset_dates[all_offset_dates == "P_G/L_date_3"]
 offset_cols_to_use  <- c(offset_names_to_use, offset_dates_to_use)
 
 offsets_to_use <- pivot_history %>% 
@@ -5042,8 +5127,8 @@ data_full <- data_full %>%
     offset_version = offset_names_to_use,           
     offset_value   = new_offset,            
     revised_depth  = sensor_depth - offset_value,
-    flag           = 1,                      
-    notes          = "High offset uncertianity V1 is 15cm lower than V2/V3. Used V1."
+    flag           = 0,                      
+    notes          = NA_character_
   )
 
 ## ------- D Plot the data with a revised offset -----------------------
@@ -5086,7 +5171,7 @@ rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
    all_offset_names, all_offsets, checks, depth_cols)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# XLIX) Site: 9_609-------------------------------------------------------
+# LII) Site: 9_609-------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ## -------- A Read the site data/metadata -----------------
@@ -5187,7 +5272,7 @@ rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
    all_offset_names, all_offsets, checks, depth_cols)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# L) Site: 9_77-------------------------------------------------------
+# LIII) Site: 9_77-------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ## -------- A Read the site data/metadata -----------------

@@ -1,10 +1,53 @@
-#####
-
+####
+# Functions for plotting and revising the PT data
+####
 library(tidyverse)
 library(readxl)
 library(plotly)
 library(glue)
 library(rlang)
+
+anomaly_remover <- function(df, revised_depth_col) {
+  # This function is designed to remove anomalously low/high values from PT timeseries.
+  # Example: logger values where the PT was above ground during well service.
+  
+  # Hard-coded thresholds for simplicity:
+  min_threshold = -0.1
+  max_threshold = 0.2
+  
+  library(slider)
+  
+  # 1. Add rolling_median & residuals to df
+  df <- df %>%
+    mutate(
+      rolling_median = slide_dbl(
+        .x = .data[[revised_depth_col]],
+        .f = median,
+        .before = 20,
+        .after = 20,
+        .complete = FALSE   # default; partial windows are allowed
+      ),
+      residuals = .data[[revised_depth_col]] - rolling_median
+    )
+  
+  # 2. Plot histogram of the new residuals column (log scale on y-axis)
+  hist(
+    x    = df$residuals,
+    breaks = 30,
+    main   = "Histogram of Residuals",
+    xlab   = "Residuals",
+  )
+  
+  # 3. Filter out anomalies based on the thresholds
+  df <- df %>%
+    filter(
+      residuals > min_threshold,
+      residuals < max_threshold
+    )
+  
+  # 4. Return filtered data frame
+  return(df)
+}
 
 calc_stages_from_offsets <- function(ts_data, pivot_history){
   
