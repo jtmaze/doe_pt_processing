@@ -12,7 +12,7 @@ anomaly_remover <- function(df, revised_depth_col) {
   # Example: logger values where the PT was above ground during well service.
   
   # Hard-coded thresholds for simplicity:
-  min_threshold = -0.1
+  min_threshold = -0.2
   max_threshold = 0.2
   
   library(slider)
@@ -31,12 +31,12 @@ anomaly_remover <- function(df, revised_depth_col) {
     )
   
   # 2. Plot histogram of the new residuals column (log scale on y-axis)
-  hist(
-    x    = df$residuals,
-    breaks = 30,
-    main   = "Histogram of Residuals",
-    xlab   = "Residuals",
-  )
+  p <- ggplot(df, aes(x = residuals)) +
+    geom_histogram(bins = 20) +
+    scale_y_log10() +
+    labs(title = "Histogram of Residuals", x = "Residuals", y = "Count")
+  
+  print(p)
   
   # 3. Filter out anomalies based on the thresholds
   df <- df %>%
