@@ -2020,7 +2020,7 @@ rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # XIX) Site: 15_4-------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# TODO: start here tommorrow. 
+
 ## -------- A Read the site data/metadata -----------------
 site <- "15_4"
 data <- site_ts_from_xlsx_sheet(compiled_path, site)
@@ -2058,9 +2058,9 @@ quick_plot_offset2(all_offsets)
 
 print(all_offsets)
 # PICK OFFSET HERE
-### !!!!!!! offset V1 !!!!!!!!!!!!!!!!!
-offset_names_to_use <- all_offset_names[all_offset_names == "offset_m_1"]
-offset_dates_to_use <- all_offset_dates[all_offset_dates == "P_G/L_date_1"]
+### !!!!!!! offset V2 !!!!!!!!!!!!!!!!!
+offset_names_to_use <- all_offset_names[all_offset_names == "offset_m_2"]
+offset_dates_to_use <- all_offset_dates[all_offset_dates == "P_G/L_date_2"]
 offset_cols_to_use  <- c(offset_names_to_use, offset_dates_to_use)
 
 offsets_to_use <- pivot_history %>% 
@@ -2069,37 +2069,32 @@ offset_vals_use <- offsets_to_use %>% select(all_of(offset_names_to_use))
 new_offset <- offset_vals_use %>% unlist() %>% mean(na.rm=TRUE)
 
 # Apply the chosen offset to the entire timeseries
-data_full <- data_full %>% 
-  mutate(offset_value = new_offset,
-         offset_version = offset_names_to_use) %>% 
-  mutate(revised_depth = sensor_depth - offset_value) %>% 
+data_full <- data_full %>%
   mutate(
-    revised_depth = case_when(
-      Date < as.Date("2022-10-16") ~ revised_depth, # Dates before problematic window
-      Date > as.Date("2023-12-18") ~ revised_depth, # Dates after problematic window
-      # Dates inside problematic window with depth > 0
-      Date >= as.Date("2022-10-16") & Date <= as.Date("2023-12-18") & revised_depth > 0 ~ revised_depth,
-      # Dates inside problematic window where water below ground
-      TRUE ~ NA_real_
-    ),
-    flag = case_when(
-      Date < as.Date("2022-10-16") ~ 0, # No special notes before
-      Date > as.Date("2023-12-18") ~ 0, # No special notes after
-      TRUE ~ 5
-    ),
-    notes = case_when(
-      Date < as.Date("2022-10-16") ~ NA_character_, # No special notes before
-      Date > as.Date("2023-12-18") ~ NA_character_, # No special notes after
-      TRUE ~ "It appears this well doesn't drain filling with storm water when stage is below ground surface (Oct 2022- Dec 2023)."
-    )
-  )
+    offset_version = offset_names_to_use,           
+    offset_value   = new_offset,            
+    revised_depth  = sensor_depth - offset_value,
+    flag           = 0,                      
+    notes          = NA_character_  
+)
     
 
 ## ------- D Plot the data with a revised offset -----------------------
+# Run the anomaly remover
+data_full <- anomaly_remover(data_full, 'revised_depth')
 
 make_site_ts(site_ts=data_full,
              y_vars=c("original_depth", "revised_depth"),
              qaqc)
+
+# Mark bottomed out data with flag = 2
+data_full <- data_full %>% 
+  mutate(flag = if_else(
+    revised_depth <= -0.68,
+    2,
+    flag
+  )
+)
 
 data_out <- data_full %>% 
   select(
@@ -2175,9 +2170,9 @@ quick_plot_offset2(all_offsets)
 
 print(all_offsets)
 # PICK OFFSET HERE
-### !!!!!!! offset V1 !!!!!!!!!!!!!!!!!
-offset_names_to_use <- all_offset_names[all_offset_names == "offset_m_1"]
-offset_dates_to_use <- all_offset_dates[all_offset_dates == "P_G/L_date_1"]
+### !!!!!!! offset V2 !!!!!!!!!!!!!!!!!
+offset_names_to_use <- all_offset_names[all_offset_names == "offset_m_2"]
+offset_dates_to_use <- all_offset_dates[all_offset_dates == "P_G/L_date_2"]
 offset_cols_to_use  <- c(offset_names_to_use, offset_dates_to_use)
 
 offsets_to_use <- pivot_history %>% 
@@ -2196,10 +2191,21 @@ data_full <- data_full %>%
   )
 
 ## ------- D Plot the data with a revised offset -----------------------
+# anomaly remover 
+data_full <- anomaly_remover(data_full, 'revised_depth')
 
 make_site_ts(site_ts=data_full,
              y_vars=c("original_depth", "revised_depth"),
              qaqc)
+
+# Flag the bottomed-out data
+data_full <- data_full %>% 
+  mutate(flag = if_else(
+    revised_depth <= -0.525,
+    2,
+    flag
+  )
+)
 
 data_out <- data_full %>% 
   select(
@@ -2297,9 +2303,21 @@ data_full <- data_full %>%
 
 ## ------- D Plot the data with a revised offset -----------------------
 
+# Run the anomaly remover
+data_full <- anomaly_remover(data_full, 'revised_depth')
+
 make_site_ts(site_ts=data_full,
              y_vars=c("original_depth", "revised_depth"),
              qaqc)
+
+# Note the bottomed out data
+data_full <- data_full %>% 
+  mutate(flag = if_else(
+    revised_depth <= -0.55,
+    2,
+    flag
+  )
+)
 
 data_out <- data_full %>% 
   select(
@@ -2396,10 +2414,21 @@ data_full <- data_full %>%
   )
 
 ## ------- D Plot the data with a revised offset -----------------------
+# Run the anomaly remover
+data_full <- anomaly_remover(data_full, 'revised_depth')
 
 make_site_ts(site_ts=data_full,
              y_vars=c("original_depth", "revised_depth"),
              qaqc)
+
+# Flag the bottomed out data
+data_full <- data_full %>% 
+  mutate(flag = if_else(
+    revised_depth <= -0.47,
+    2,
+    flag
+  )
+)
 
 data_out <- data_full %>% 
   select(
@@ -2474,10 +2503,10 @@ quick_plot_offset2(all_offsets)
 
 print(all_offsets)
 # PICK OFFSET HERE
-### !!!!!!! offset V1 !!!!!!!!!!!!!!!!!
+### !!!!!!! offset V2 !!!!!!!!!!!!!!!!!
 # Offset v3 is clearly wrong
-offset_names_to_use <- all_offset_names[all_offset_names == "offset_m_1"]
-offset_dates_to_use <- all_offset_dates[all_offset_dates == "P_G/L_date_1"]
+offset_names_to_use <- all_offset_names[all_offset_names == "offset_m_2"]
+offset_dates_to_use <- all_offset_dates[all_offset_dates == "P_G/L_date_2"]
 offset_cols_to_use  <- c(offset_names_to_use, offset_dates_to_use)
 
 offsets_to_use <- pivot_history %>% 
@@ -2496,10 +2525,21 @@ data_full <- data_full %>%
   )
 
 ## ------- D Plot the data with a revised offset -----------------------
+# run the anomaly remover
+data_full <- anomaly_remover(data_full, 'revised_depth')
 
 make_site_ts(site_ts=data_full,
              y_vars=c("original_depth", "revised_depth"),
              qaqc)
+
+# Flag bottomed out data with flag =2
+data_full <- data_full %>% 
+  mutate(flag = if_else(
+    revised_depth <= -0.765,
+    2,
+    flag
+  )
+)
 
 data_out <- data_full %>% 
   select(
@@ -2590,15 +2630,20 @@ data_full <- data_full %>%
     offset_version = offset_names_to_use,           
     offset_value   = new_offset,            
     revised_depth  = sensor_depth - offset_value,
-    flag           = 0,                      
-    notes          = NA_character_
+    flag           = if_else(Date >= '2024-05-03', 1, 0),                      
+    notes          = if_else(Date >= '2024-05-03', 'Post May 3rd 2024, bad field check agreement.', NA_character_)
   )
 
 ## ------- D Plot the data with a revised offset -----------------------
 
+# Run the anomaly remover
+data_full <- anomaly_remover(data_full, 'revised_depth')
+
 make_site_ts(site_ts=data_full,
              y_vars=c("original_depth", "revised_depth"),
              qaqc)
+
+# NOTE: well does not bottom out, TBD for depth limit flag. 
 
 data_out <- data_full %>% 
   select(
@@ -2689,15 +2734,27 @@ data_full <- data_full %>%
     offset_version = offset_names_to_use,           
     offset_value   = new_offset,            
     revised_depth  = sensor_depth - offset_value,
-    flag           = 0,                      
-    notes          = NA_character_
+    flag           = if_else(Date >= '2023-06-23', 1, 0),                      
+    notes          = if_else(Date >= '2023-06-23', 'Limited field checks. Bottom-out depth change? Need more QAQC', NA_character_)    
   )
 
 ## ------- D Plot the data with a revised offset -----------------------
 
+# Run the anomaly remover
+data_full <- anomaly_remover(data_full, 'revised_depth')
+
 make_site_ts(site_ts=data_full,
              y_vars=c("original_depth", "revised_depth"),
              qaqc)
+
+# Flag the bottomed out data = 2
+data_full <- data_full %>% 
+  mutate(flag = if_else(
+    revised_depth <= -0.72,
+    2,
+    flag
+  )
+)
 
 data_out <- data_full %>% 
   select(
@@ -2793,10 +2850,21 @@ data_full <- data_full %>%
   )
 
 ## ------- D Plot the data with a revised offset -----------------------
+# Run the anomaly remover
+data_full <- anomaly_remover(data_full, 'revised_depth')
 
 make_site_ts(site_ts=data_full,
              y_vars=c("original_depth", "revised_depth"),
              qaqc)
+
+# Flag bottomed out data with flag = 2
+data_full <- data_full %>% 
+  mutate(flag = if_else(
+    revised_depth <= -0.68,
+    2,
+    flag
+  )
+)
 
 data_out <- data_full %>% 
   select(
@@ -2871,32 +2939,65 @@ quick_plot_offset2(all_offsets)
 
 print(all_offsets)
 # PICK OFFSET HERE
-### !!!!!!! offset V1 !!!!!!!!!!!!!!!!!
+### !!!!!!! offset V2 !!!!!!!!!!!!!!!!!
 # V3 offset is clearly wrong!
-offset_names_to_use <- all_offset_names[all_offset_names == "offset_m_1"]
-offset_dates_to_use <- all_offset_dates[all_offset_dates == "P_G/L_date_1"]
+offset_names_to_use <- all_offset_names[all_offset_names == "offset_m_2"]
+offset_dates_to_use <- all_offset_dates[all_offset_dates == "P_G/L_date_2"]
 offset_cols_to_use  <- c(offset_names_to_use, offset_dates_to_use)
 
 offsets_to_use <- pivot_history %>% 
   select(all_of(offset_cols_to_use))
 offset_vals_use <- offsets_to_use %>% select(all_of(offset_names_to_use))
-new_offset <- offset_vals_use %>% unlist() %>% mean(na.rm=TRUE)
+
+offset_names_to_use1 <- offset_names_to_use
+new_offset1 <- offset_vals_use %>% unlist() %>% mean(na.rm=TRUE)
+
+offset_names_to_use2 <- 'Estimated offset to fix download jump'
+new_offset2 <- 0.50
 
 # Apply the chosen offset to the entire timeseries
-data_full <- data_full %>%
+data_full <- data_full %>% 
   mutate(
-    offset_version = offset_names_to_use,           
-    offset_value   = new_offset,            
-    revised_depth  = sensor_depth - offset_value,
-    flag           = 0,                      
-    notes          = NA_character_
+    offset_version = case_when(
+      Date <=  as.Date("2024-05-02") ~ offset_names_to_use1,
+      Date >=  as.Date("2024-05-04") ~ offset_names_to_use2,
+      TRUE                          ~ NA_character_  # "Between" dates get NA 
+    ),
+    offset_value = case_when(
+      Date <=  as.Date("2024-05-02") ~ new_offset1,
+      Date >=  as.Date("2024-05-04") ~ new_offset2,
+      TRUE                          ~ NA_real_
+    ),
+    flag = case_when(
+      Date <=  as.Date("2024-05-02") ~ 0,
+      Date >=  as.Date("2024-05-04") ~ 1,
+      TRUE                          ~ NA_real_
+    ),
+    notes = case_when(
+      Date <=  as.Date("2024-05-02") ~ NA_character_,
+      Date >=  as.Date("2024-05-04") ~ 'Data shifted on download date. Estimated new offset, but bottom out depth changes.',
+      TRUE                          ~ NA_character_
+    ),
+    revised_depth = case_when(
+      Date <  as.Date("2024-05-02") ~ sensor_depth - offset_value,
+      Date >  as.Date("2024-05-04") ~ sensor_depth - offset_value,
+      TRUE ~ NA_real_
+    ),
   )
 
 ## ------- D Plot the data with a revised offset -----------------------
+# Run the anomaly remover
+data_full <- anomaly_remover(data_full, 'revised_depth')
 
 make_site_ts(site_ts=data_full,
              y_vars=c("original_depth", "revised_depth"),
              qaqc)
+
+# Flag bottomed out data with flag = 2
+data_full <- data_full %>% 
+  mutate(flag = if_else(
+    revised_depth <= -0.44
+  ))
 
 data_out <- data_full %>% 
   select(
@@ -2926,8 +3027,9 @@ output_checks <- bind_rows(output_checks, checks_final)
 rm(site, data, qaqc, pivot_history, 
    status, data_full, data_out, checks_final) 
 
-rm(offsets_to_use, new_offset, offset_cols_to_use, 
-   offset_dates_to_use, offset_names_to_use, offset_vals_use)
+rm(offsets_to_use, new_offset1, new_offset2, offset_cols_to_use, 
+   offset_dates_to_use, offset_names_to_use, offset_vals_use,
+   offset_names_to_use1, offset_names_to_use2)
 rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
    all_offset_names, all_offsets, checks, depth_cols)
 
@@ -2979,23 +3081,52 @@ offset_cols_to_use  <- c(offset_names_to_use, offset_dates_to_use)
 offsets_to_use <- pivot_history %>% 
   select(all_of(offset_cols_to_use))
 offset_vals_use <- offsets_to_use %>% select(all_of(offset_names_to_use))
-new_offset <- offset_vals_use %>% unlist() %>% mean(na.rm=TRUE)
+
+offset_names_to_use1 <- offset_names_to_use
+new_offset1 <- offset_vals_use %>% unlist() %>% mean(na.rm=TRUE)
+
+offset_names_to_use2 <- 'Estimated offset to fix download jump'
+new_offset2 <- 0.52
 
 # Apply the chosen offset to the entire timeseries
-data_full <- data_full %>%
+data_full <- data_full %>% 
   mutate(
-    offset_version = offset_names_to_use,           
-    offset_value   = new_offset,            
-    revised_depth  = sensor_depth - offset_value,
-    flag           = 0,                      
-    notes          = NA_character_
+    offset_version = case_when(
+      Date <=  as.Date("2024-05-02") ~ offset_names_to_use1,
+      Date >=  as.Date("2024-05-04") ~ offset_names_to_use2,
+      TRUE                          ~ NA_character_  # "Between" dates get NA 
+    ),
+    offset_value = case_when(
+      Date <=  as.Date("2024-05-02") ~ new_offset1,
+      Date >=  as.Date("2024-05-04") ~ new_offset2,
+      TRUE                          ~ NA_real_
+    ),
+    flag = case_when(
+      Date <=  as.Date("2024-05-02") ~ 0,
+      Date >=  as.Date("2024-05-04") ~ 1,
+      TRUE                          ~ NA_real_
+    ),
+    notes = case_when(
+      Date <=  as.Date("2024-05-02") ~ NA_character_,
+      Date >=  as.Date("2024-05-04") ~ 'Data shifted on download date. Estimated new offset, but bottom out depth changes.',
+      TRUE                          ~ NA_character_
+    ),
+    revised_depth = case_when(
+      Date <  as.Date("2024-05-02") ~ sensor_depth - offset_value,
+      Date >  as.Date("2024-05-04") ~ sensor_depth - offset_value,
+      TRUE ~ NA_real_
+    ),
   )
 
 ## ------- D Plot the data with a revised offset -----------------------
+# Run the anomaly remover 
+data_full <- anomaly_remover(data_full, 'revised_depth')
 
 make_site_ts(site_ts=data_full,
              y_vars=c("original_depth", "revised_depth"),
              qaqc)
+
+# NOTE: timeseries does not bottom out, so bottom out depth is TBD.
 
 data_out <- data_full %>% 
   select(
@@ -3024,9 +3155,9 @@ output_checks <- bind_rows(output_checks, checks_final)
 
 rm(site, data, qaqc, pivot_history, 
    status, data_full, data_out, checks_final) 
-
-rm(offsets_to_use, new_offset, offset_cols_to_use, 
-   offset_dates_to_use, offset_names_to_use, offset_vals_use)
+rm(offsets_to_use, new_offset1, new_offset2, offset_cols_to_use, 
+   offset_dates_to_use, offset_names_to_use, offset_vals_use,
+   offset_names_to_use1, offset_names_to_use2)
 rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
    all_offset_names, all_offsets, checks, depth_cols)
 
@@ -3092,9 +3223,21 @@ data_full <- data_full %>%
 
 ## ------- D Plot the data with a revised offset -----------------------
 
+# run the anomaly remover
+data_full <- anomaly_remover(data_full, 'revised_depth')
+
 make_site_ts(site_ts=data_full,
              y_vars=c("original_depth", "revised_depth"),
              qaqc)
+
+# Note the bottom-out depth with flag = 2
+data_full <- data_full %>% 
+  mutate(flag = if_else(
+    revised_depth <= -0.715,
+    2,
+    flag
+  )
+)
 
 data_out <- data_full %>% 
   select(
@@ -3191,9 +3334,14 @@ data_full <- data_full %>%
 
 ## ------- D Plot the data with a revised offset -----------------------
 
+# Run the anomaly remover
+data_full <- anomaly_remover(data_full, 'revised_depth')
+
 make_site_ts(site_ts=data_full,
              y_vars=c("original_depth", "revised_depth"),
              qaqc)
+
+# NOTE: the well soes not appear to bottom out. Bottoming out depth is TBD. 
 
 data_out <- data_full %>% 
   select(
@@ -3291,9 +3439,21 @@ data_full <- data_full %>%
 
 ## ------- D Plot the data with a revised offset -----------------------
 
+# run the anomaly remover
+data_full <- anomaly_remover(data_full, 'revised_depth')
+
 make_site_ts(site_ts=data_full,
              y_vars=c("original_depth", "revised_depth"),
              qaqc)
+
+# Flag the bottomed-out data = 2
+data_full <- data_full %>% 
+  mutate(flag = if_else(
+    revised_depth <= -0.615,
+    2,
+    flag
+  )
+)
 
 data_out <- data_full %>% 
   select(
@@ -3390,9 +3550,21 @@ data_full <- data_full %>%
 
 ## ------- D Plot the data with a revised offset -----------------------
 
+# run the anomaly remover
+data_full <- anomaly_remover(data_full, 'revised_depth')
+
 make_site_ts(site_ts=data_full,
              y_vars=c("original_depth", "revised_depth"),
              qaqc)
+
+# Note the bottoming out depth with flag = 2
+data_full <- data_full %>% 
+  mutate(flag = if_else(
+    revised_depth <= -1.055,
+    2,
+    flag
+  )
+)
 
 data_out <- data_full %>% 
   select(
@@ -3469,7 +3641,7 @@ quick_plot_offset2(all_offsets)
 print(all_offsets)
 
 # PICK OFFSET HERE
-### !!!!!!! offset V1 !!!!!!!!!!!!!!!!!
+### !!!!!!! offset V3 !!!!!!!!!!!!!!!!!
 offset_names_to_use <- all_offset_names[all_offset_names == "offset_m_3"]
 offset_dates_to_use <- all_offset_dates[all_offset_dates == "P_G/L_date_3"]
 offset_cols_to_use  <- c(offset_names_to_use, offset_dates_to_use)
@@ -3490,10 +3662,14 @@ data_full <- data_full %>%
   )
 
 ## ------- D Plot the data with a revised offset -----------------------
+# run the anomaly remover
+data_full <- anomaly_remover(data_full, 'revised_depth')
 
 make_site_ts(site_ts=data_full,
              y_vars=c("original_depth", "revised_depth"),
              qaqc)
+
+# NOTE: there is not a clear bottom-out depth for this site. TBD. 
 
 data_out <- data_full %>% 
   select(
@@ -3590,10 +3766,21 @@ data_full <- data_full %>%
   )
 
 ## ------- D Plot the data with a revised offset -----------------------
+# run the anomaly remover
+data_full <- anomaly_remover(data_full, 'revised_depth')
 
 make_site_ts(site_ts=data_full,
              y_vars=c("original_depth", "revised_depth"),
              qaqc)
+
+# Note the bottom-out depth with flag = 2
+data_full <- data_full %>% 
+  mutate(flag = if_else(
+    revised_depth <= -0.69,
+    2,
+    flag
+  )
+)
 
 data_out <- data_full %>% 
   select(
@@ -3632,6 +3819,7 @@ rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
 # XXXV) Site: 5_597 -------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+# TODO: start here tommorrow morning
 ## -------- A Read the site data/metadata -----------------
 site <- "5_597"
 data <- site_ts_from_xlsx_sheet(compiled_path, site)
