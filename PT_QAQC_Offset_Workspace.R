@@ -5971,9 +5971,9 @@ output_data <- output_data %>%
   mutate(
     flag = case_when(
       basin_id %in% south_ids &
-        between(Date, as.Date("2022-01-27"), as.Date("2022-05-27")) ~ 1,
+        between(Date, as.Date("2022-01-27"), as.Date("2022-05-27")) ~ 4,
       basin_id %in% north_ids &
-        between(Date, as.Date("2022-01-27"), as.Date("2022-04-09")) ~ 1,
+        between(Date, as.Date("2022-01-27"), as.Date("2022-04-09")) ~ 4,
       TRUE ~ flag
     )
   ) %>% 
