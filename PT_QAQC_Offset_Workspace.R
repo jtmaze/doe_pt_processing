@@ -2996,8 +2996,11 @@ make_site_ts(site_ts=data_full,
 # Flag bottomed out data with flag = 2
 data_full <- data_full %>% 
   mutate(flag = if_else(
-    revised_depth <= -0.44
-  ))
+    revised_depth <= -0.44, 
+    2,
+    flag
+  )
+)
 
 data_out <- data_full %>% 
   select(
@@ -5956,6 +5959,34 @@ rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # WRITE OUTPUT DATA & CHECKS-------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+# TODO: There appears to be a baro issue creating noisy data Jan-Apr/May 2022.
+# The issue is happening at both North and South baros with slightly different timeframes.
+# Not sure if I can fix the problem, but let's flag it for now. 
+north_ids <- c("6", "6a", "3", "7")
+south_ids <- c("5", "5a", "15", "9", "14", "13", "14.9")
+
+output_data <- output_data %>% 
+  mutate(basin_id = str_split(Site_ID, '_') %>% map_chr(1)) %>% 
+  mutate(
+    flag = case_when(
+      basin_id %in% south_ids &
+        between(Date, as.Date("2022-01-27"), as.Date("2022-05-27")) ~ 1,
+      basin_id %in% north_ids &
+        between(Date, as.Date("2022-01-27"), as.Date("2022-04-09")) ~ 1,
+      TRUE ~ flag
+    )
+  ) %>% 
+  mutate(
+    notes = case_when(
+      basin_id %in% south_ids &
+        between(Date, as.Date("2022-01-27"), as.Date("2022-05-27")) ~ 'Peculiarly noisy data for all wells. Baro issue?',
+      basin_id %in% north_ids &
+        between(Date, as.Date("2022-01-27"), as.Date("2022-04-09")) ~ 'Peculiarly noisy data for all wells. Baro issue?',
+      TRUE ~ notes
+    )
+  ) %>% 
+  select(-basin_id)
 
 write_csv(output_checks, './data/out_data/well_checks_log.csv')
 write_csv(output_data, './data/out_data/waterlevel_offsets_tracked.csv')
