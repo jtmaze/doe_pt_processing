@@ -78,9 +78,14 @@ make_site_ts <- function(site_ts,
                          trace_names = NULL) {
   
   # Get site ID
-  site_id <- site_ts %>% 
-    pull(Site_ID) %>% 
-    unique()
+  if ("Site_ID" %in% names(site_ts)) {
+    site_id <- site_ts %>%
+      pull(Site_ID) %>%
+      unique()
+    site_label <- paste(site_id, collapse = ", ")
+  } else {
+    site_label <- "Site Not Specified"
+  }
   
   # Initialize plot
   fig <- plot_ly()
@@ -116,7 +121,7 @@ make_site_ts <- function(site_ts,
   }
   
   fig %>% 
-    layout(title = glue("PT Data for Wetland {site_id}"))
+    layout(title = glue("PT Data for Wetland {site_label}"))
 }
 
 calculate_chk_ts_diffs <- function(ts, qaqc_df, version){
