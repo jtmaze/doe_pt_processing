@@ -430,5 +430,8 @@ make_site_ts(test, site_cols)
 
 #4.0 Write the output -------------------------------------------------------
 
+output <- output %>% 
+  rename(timestamp_utc = Date)
+
 output_path <- 'D:/depressional_lidar/data/osbs/in_data/stage_data/osbs_core_wells_consistent_datum.csv'
 write_csv(output, output_path)
