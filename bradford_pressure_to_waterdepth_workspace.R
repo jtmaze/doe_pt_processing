@@ -6,12 +6,12 @@ library(readxl)
 library(writexl)
 library(openxlsx)
 
-raw_dir <- './data/raw_files_F24-W25/'
+raw_dir <- 'D:/doe_pt_processing/data_bradford/raw_files_F24-W25/spring_2025_batch/'
 raw_files <- list.files(path=raw_dir, pattern='LL.csv', full.names=TRUE)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# 2.0 Compile all the csvs -------------------------------------------------------
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# 2.0 Compile all the latest downloads (csv files) -------------------------------------------------------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 combined_raw_files <- data.frame()
 
@@ -24,6 +24,15 @@ for(f in raw_files){
   df$BasinID <- strsplit(basename(f), '_')[[1]][1]
   df$WetlandID <- strsplit(basename(f), '_')[[1]][2]
   df$Site_ID <- paste(df$BasinID, df$WetlandID, sep = "_")
+
+  # add quick conditional renaming for Sunita's new wetlands
+  df$Site_ID <- ifelse(df$Site_ID == "wet_wetland", "wet_wetland_east",
+                       ifelse(df$Site_ID == "dry_wetland", "dry_wetland_west",
+                              df$Site_ID))
+  df$BasinID <- ifelse(df$BasinID == "wet", 13,
+                       ifelse(df$BasinID == "dry", 13,
+                              df$BasinID))
+  
   combined_raw_files <- rbind(combined_raw_files, df)
   rm(df)
 }
@@ -35,10 +44,14 @@ print(unique_wetlands)
 print(unique_basins)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# 3.0 Assign Baro Loggers to the Wetlands -------------------------------------------------------
+# 3.0 Assign baro Loggers to the Wetland's downloads -------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-combined_raw_files$BasinID[combined_raw_files$BasinID == '14/9' | combined_raw_files$BasinID == 149] <- '14.9'
+# Basin 14.9 has tricky syntax "/" reformat for baro matching
+combined_raw_files$BasinID[
+  combined_raw_files$BasinID == '14/9' | 
+  combined_raw_files$BasinID == 149
+] <- '14.9'
 
 assign_baro <- function(df) {
   
@@ -68,10 +81,11 @@ assign_baro <- function(df) {
 combined_raw_files <- assign_baro(combined_raw_files)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-## 3.1 Compile all csvs for sites missing old data  -------------------------------------------------------
+## 3.1 Compile all csvs for sites missing old data (pre 2024)  -------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-missing_sites = c('13_274', '5_546', '7_622')
-missing_df <- read_csv('./data/compiled_PT.csv') %>% 
+
+missing_sites = c('13_274', '5_546', '7_622') # TODO: Figure out what is happening here
+missing_df <- read_csv('D:/doe_pt_processing/data_bradford/archive_files/compiled_PT.csv') %>% 
   mutate(WetlandID = as.character(WetlandID),
          Site_ID = paste(BasinID, WetlandID, sep='_')) %>% 
   filter(Site_ID %in% missing_sites) %>% 
@@ -80,14 +94,13 @@ missing_df <- read_csv('./data/compiled_PT.csv') %>%
 combined_raw_files <- bind_rows(combined_raw_files, missing_df)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-## 3.2 Round the Site_IDs where PTs aren't recording on the hour -------------------------------------------------------
-## NOTE this bug caused several sites to not be processed in the earlier script -------------------
+## 3.2 Round the timeseries where/when PTs aren't recording on the hour -------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 round_dates_not_on_hour <- function(df) {
   
   df$Date <- as.POSIXct(df$Date)
-  # Round the Date column to the nearest hour to match with Baros
+  # Round the Date column to the nearest hour to match with baros
   df <- df %>% 
     mutate(
       rounded_time = round_date(Date, unit="hour"), 
@@ -115,11 +128,13 @@ combined_raw_files <- round_dates_not_on_hour(combined_raw_files)
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ## 3.3 Join baro data with Wetland PT data -------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-baro_data <- read_csv(paste0(raw_dir, 'compiled_baro.csv')) %>% 
+baro_dir <- "D:/doe_pt_processing/data_bradford/"
+baro_data <- read_csv(paste0(baro_dir, 'compiled_baro.csv')) %>% 
   rename(baro_region = region) %>% 
-  distinct() # For some reason there were lots of duplicate baro observations for a given date and region
+  distinct() %>% # For some reason there were lots of duplicate baro observations for a given date and region
+  select(-`Temp.air`)
 
+  
 combined_raw_files <- left_join(
   combined_raw_files, 
   baro_data, 
@@ -133,8 +148,8 @@ combined_raw_files <- left_join(
 
 calc_water_height <- function(df) {
   out_df <- df %>% 
-    mutate(Water_press = PT - PTbaro,
-           sensor_depth = 1000 * Water_press / 2.2 /(2.54^2) /100)
+    mutate(water_press = PT - PTbaro,
+           sensor_depth = 1000 * water_press / 2.2 /(2.54^2) /100)
   
   return(out_df)
 }
@@ -146,7 +161,7 @@ compiled_pt_data <- calc_water_height(combined_raw_files)
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 wetland_well_meta <- read_excel(
-  './data/Wetland_well_metadata_1.xlsx', 
+  'D:/doe_pt_processing/data_bradford/Wetland_well_metadata_JM.xlsx', 
   sheet = "Wetland_pivot_history"
 )
 
@@ -178,10 +193,11 @@ PG_PL <- rbind(chk1, chk2, chk3, chk4, chk5) %>%
 rm(chk1, chk2, chk3, chk4, chk5, wetland_well_meta)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# 6.0 Dynamically apply offset overtime (NOTE BAD PROCEDURE) -------------------------------------------------------
+# 6.0 Dynamically apply offset overtime (NOTE BAD/OLD PROCEDURE) -------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # !!! For finalized data we don't change the well's PG/PL and offset measurements
-# !!! Only keeping this step for continuity of data. 
+# !!! Only keeping this step for continuity of data.
+# !!! The main objective is to illustrate what data would look like with the bad/old procedure
 
 # Join PG_PL to the
 compiled_pt_data <- compiled_pt_data %>% 
@@ -206,18 +222,31 @@ compiled_pt_data <- compiled_pt_data %>%
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 compiled_pt_data <- compiled_pt_data %>% 
   rename(Site = Site_ID) %>% 
-  select(Date, Site, BasinID, Water_press, sensor_depth, depth, PT, PTbaro, PG, PL)
+  select(Date, Site, BasinID, water_press, sensor_depth, depth, PT, PTbaro, PG, PL)
 
 # Read the previous data
-previous_data_path <- './data/compiled_stage_2.xlsx'
+previous_data_path <- "D:/doe_pt_processing/data_bradford/compiled_stage_prior_2025_notJM.xlsx"
 sheet_names <- excel_sheets(previous_data_path)
 previous_dfs <- lapply(sheet_names, function(sheet) {
   read_excel(previous_data_path, sheet=sheet)
 })
 previous <- bind_rows(previous_dfs)
+
+coverage <- previous %>%
+  group_by(Site) %>%
+  summarize(
+    first_date = min(Date),
+    last_date = max(Date),
+    .groups = "drop"
+  )
+
 rm(previous_dfs)
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+## 7.1 Calculate water depth in old data with adjusted -------------------------------------------------------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # NOTE: I'm recalculating water depth for pre-existing data, 
-# becuase there was a suspect baro measurement from January 7th 2022 until 
+# because there was a suspect baro measurement from January 7th 2022 until 
 # April 9th 2022 for sites using the South baro logger.
 
 previous <- previous %>% 
@@ -225,14 +254,6 @@ previous <- previous %>%
   rename(Site_ID = Site)
 
 previous <- assign_baro(previous)
-
-# previous <- previous %>% 
-#   mutate(
-#     baro_region = case_when(
-#       Date >= as.Date('2022-01-27') & Date <= as.Date('2022-04-09') ~ "N",
-#       TRUE ~ baro_region
-#     )
-#   )
 
 previous <- left_join(
   previous, 
@@ -259,6 +280,9 @@ compiled_pt_data <- bind_rows(compiled_pt_data, previous) %>%
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 sheet_list <- split(compiled_pt_data, compiled_pt_data$Site)
-write.xlsx(sheet_list, "./data/compiled_stage_JM.xlsx")
+write.xlsx(
+  sheet_list, 
+  "D:/doe_pt_processing/data_bradford/compiled_data_to_check_offsets.xlsx"
+)
 
 

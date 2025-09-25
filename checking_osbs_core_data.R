@@ -431,7 +431,24 @@ make_site_ts(test, site_cols)
 #4.0 Write the output -------------------------------------------------------
 
 output <- output %>% 
-  rename(timestamp_utc = Date)
+  rename(date = Date,
+         water_level = well_depth_m)
 
-output_path <- 'D:/depressional_lidar/data/osbs/in_data/stage_data/osbs_core_wells_consistent_datum.csv'
+# Remapping well_ids for consistency with Audrey's metadata
+id_map <- c(
+  "Ross Pond"      = "Ross",
+  "Brantley North" = "Brantley North",
+  "Devils Den"     = "Devils Den",
+  "Surprise Pond"  = "Surprise",
+  "West Ford"      = "West Ford",
+  "Fishcove"       = "Fish Cove"
+)
+
+# remap well_id in your dataframe (df)
+output <- output %>%
+  mutate(well_id = recode(well_id, !!!id_map))
+
+
+output_path <- 'D:/depressional_lidar/data/osbs/in_data/stage_data/osbs_core_wells_tracked_datum.csv'
 write_csv(output, output_path)
+

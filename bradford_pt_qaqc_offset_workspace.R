@@ -12,18 +12,18 @@ source("./scripts/qaqc_functions.R")
 source("./scripts/data_read_functions.R")
 
 # Path to original data containing depth and water depth
-compiled_path <-'./data/compiled_stage_JM_2.xlsx'
+compiled_path <-'D:/doe_pt_processing/data_bradford/compiled_data_to_check_offsets.xlsx'
 # Path to wetland well metadata.
 # Contains field measurements for water level and well dimensions 
-meta_data_path <- './data/Wetland_well_metadata_JM.xlsx'
-status_path <- './data/Post_Processing_Well_Status.xlsx'
+meta_data_path <- 'D:/doe_pt_processing/data_bradford/Wetland_well_metadata_JM.xlsx'
+status_path <- 'D:/doe_pt_processing/data_bradford/Post_Processing_Well_Status.xlsx'
 
 
-# unique_wetland_wells <- read_excel(meta_data_path, sheet="Wetland_and_well_info") %>% 
-#   pull('Site_ID') %>% 
-#   unique()
-# 
-# print(unique_wetland_wells)
+unique_wetland_wells <- read_excel(meta_data_path, sheet="Wetland_and_well_info") %>%
+  pull('Site_ID') %>%
+  unique()
+
+print(unique_wetland_wells)
 
 # Make output dataframe and define columns
 output_data <- tibble(
@@ -46,16 +46,6 @@ output_checks <- tibble(
   logger_val_m = numeric(),
   Site_ID = character()
 )
-
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# Priority Wetlands -------------------------------------------------------
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-# Sunita: !!!6_93, 14_612, 5a_582, !!!14_500, !!!15_409 and 13_267
-
-# AJ:6_300; !!!6_20; !!!15_409; !!!15_4; 15_268; 14/9_601; 
-# 14/9_527; 14/9_168; !!!14_500; !!!14_115; !!!13_410; 13_274; 
-# 3_34; 3_311; !!!9_332; !!!5_510
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # I) Site: 13_263 -------------------------------------------------------
@@ -88,6 +78,7 @@ print(ts_cols)
 make_site_ts(site_ts=data_full, 
              y_vars = ts_cols, 
              qaqc_df = qaqc)
+
 # Plot checks
 checks <- make_checks_df(data_full, qaqc)
 plot_checks(checks, site)
@@ -5957,6 +5948,226 @@ rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
    all_offset_names, all_offsets, checks, depth_cols)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# LIV) Site: Sunita Wetland Wet East -------------------------------------------------------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+## -------- A Read the site data/metadata -----------------
+site <- "wet_wetland_east"
+data <- site_ts_from_xlsx_sheet(compiled_path, site)
+qaqc <- fetch_water_checks(meta_data_path, site) 
+pivot_history <- fetch_pivot_history(meta_data_path, site)
+
+## ------ B Explore depth versions -------------------------
+data_full <- calc_stages_from_offsets(data, pivot_history)
+# Select columns to plot
+all_cols <- colnames(data_full)
+depth_cols <- grep('depth', all_cols, value=TRUE)
+not_to_plot <- c("sensor_depth")
+ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+print(ts_cols)
+
+# Make plots
+make_site_ts(site_ts=data_full, 
+             y_vars = ts_cols, 
+             qaqc_df = qaqc)
+# Plot checks
+checks <- make_checks_df(data_full, qaqc)
+plot_checks(checks, site)
+# Plot offsets
+all_offset_names <- grep("offset_m_", all_cols, value=TRUE)
+all_offset_dates <- grep("P_G/L_date_", all_cols, value=TRUE)
+all_offset_cols <- c(all_offset_dates, all_offset_names)
+all_offsets <- pivot_history %>% 
+  select(all_of(all_offset_cols))
+quick_plot_offset2(all_offsets)
+
+## ------- C Revise water depth -----------------------------------------
+
+print(all_offsets)
+
+# PICK OFFSET HERE
+### !!!!!!! offset V1 !!!!!!!!!!!!!!!!!
+offset_names_to_use <- all_offset_names[all_offset_names == "offset_m_1"]
+offset_dates_to_use <- all_offset_dates[all_offset_dates == "P_G/L_date_1"]
+offset_cols_to_use  <- c(offset_names_to_use, offset_dates_to_use)
+
+offsets_to_use <- pivot_history %>% 
+  select(all_of(offset_cols_to_use))
+offset_vals_use <- offsets_to_use %>% select(all_of(offset_names_to_use))
+new_offset <- offset_vals_use %>% unlist() %>% mean(na.rm=TRUE)
+
+# Apply the chosen offset to the entire timeseries
+data_full <- data_full %>%
+  mutate(
+    offset_version = offset_names_to_use,           
+    offset_value   = new_offset,            
+    revised_depth  = sensor_depth - offset_value,
+    flag           = 0,                      
+    notes          = NA_character_
+  )
+
+## ------- D Plot the data with a revised offset -----------------------
+
+# run the anomaly remover
+data_full <- anomaly_remover(data_full, 'revised_depth')
+
+make_site_ts(site_ts=data_full,
+             y_vars=c("original_depth", "revised_depth"),
+             qaqc)
+
+# Flag = 2 for bottomed out data
+data_full <- data_full %>% 
+  mutate(flag = if_else(
+    revised_depth <= -0.68,
+    2,
+    flag
+  )
+  )
+
+data_out <- data_full %>% 
+  select(
+    c(
+      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
+      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+    )
+  )
+
+checks_final <- make_checks_df(data_out, qaqc)
+plot_checks(checks_final, site)
+
+## ------------ E Join Output clean up environment ------------------
+
+# Add timeseries to output
+data_out <- data_out %>% 
+  select(-c('depth_avg')) 
+output_data <- bind_rows(output_data, data_out)  
+
+# Add checks to output
+checks_final <- checks_final %>%
+  mutate("Site_ID" = site) %>% 
+  rename(field_check_m = chk_m,
+         logger_val_m = logger_date_mean_trimmed)
+output_checks <- bind_rows(output_checks, checks_final)
+
+rm(site, data, qaqc, pivot_history, 
+   status, data_full, data_out, checks_final) 
+
+rm(offsets_to_use, new_offset, offset_cols_to_use, 
+   offset_dates_to_use, offset_names_to_use, offset_vals_use)
+rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
+   all_offset_names, all_offsets, checks, depth_cols)
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# LV) Site: Sunita Wetland Dry West -------------------------------------------------------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+## -------- A Read the site data/metadata -----------------
+site <- "dry_wetland_west"
+data <- site_ts_from_xlsx_sheet(compiled_path, site)
+qaqc <- fetch_water_checks(meta_data_path, site) 
+pivot_history <- fetch_pivot_history(meta_data_path, site)
+
+## ------ B Explore depth versions -------------------------
+data_full <- calc_stages_from_offsets(data, pivot_history)
+# Select columns to plot
+all_cols <- colnames(data_full)
+depth_cols <- grep('depth', all_cols, value=TRUE)
+not_to_plot <- c("sensor_depth")
+ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+print(ts_cols)
+
+# Make plots
+make_site_ts(site_ts=data_full, 
+             y_vars = ts_cols, 
+             qaqc_df = qaqc)
+# Plot checks
+checks <- make_checks_df(data_full, qaqc)
+plot_checks(checks, site)
+# Plot offsets
+all_offset_names <- grep("offset_m_", all_cols, value=TRUE)
+all_offset_dates <- grep("P_G/L_date_", all_cols, value=TRUE)
+all_offset_cols <- c(all_offset_dates, all_offset_names)
+all_offsets <- pivot_history %>% 
+  select(all_of(all_offset_cols))
+quick_plot_offset2(all_offsets)
+
+## ------- C Revise water depth -----------------------------------------
+
+print(all_offsets)
+
+# PICK OFFSET HERE
+### !!!!!!! offset V1 !!!!!!!!!!!!!!!!!
+offset_names_to_use <- all_offset_names[all_offset_names == "offset_m_1"]
+offset_dates_to_use <- all_offset_dates[all_offset_dates == "P_G/L_date_1"]
+offset_cols_to_use  <- c(offset_names_to_use, offset_dates_to_use)
+
+offsets_to_use <- pivot_history %>% 
+  select(all_of(offset_cols_to_use))
+offset_vals_use <- offsets_to_use %>% select(all_of(offset_names_to_use))
+new_offset <- offset_vals_use %>% unlist() %>% mean(na.rm=TRUE)
+
+# Apply the chosen offset to the entire timeseries
+data_full <- data_full %>%
+  mutate(
+    offset_version = offset_names_to_use,           
+    offset_value   = new_offset,            
+    revised_depth  = sensor_depth - offset_value,
+    flag           = 0,                      
+    notes          = NA_character_
+  )
+
+## ------- D Plot the data with a revised offset -----------------------
+
+# run the anomaly remover
+data_full <- anomaly_remover(data_full, 'revised_depth')
+
+make_site_ts(site_ts=data_full,
+             y_vars=c("original_depth", "revised_depth"),
+             qaqc)
+
+# Flag = 2 for bottomed out data
+data_full <- data_full %>% 
+  mutate(flag = if_else(
+    revised_depth <= -0.68,
+    2,
+    flag
+  )
+  )
+
+data_out <- data_full %>% 
+  select(
+    c(
+      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
+      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+    )
+  )
+
+checks_final <- make_checks_df(data_out, qaqc)
+plot_checks(checks_final, site)
+
+## ------------ E Join Output clean up environment ------------------
+
+# Add timeseries to output
+data_out <- data_out %>% 
+  select(-c('depth_avg')) 
+output_data <- bind_rows(output_data, data_out)  
+
+# Add checks to output
+checks_final <- checks_final %>%
+  mutate("Site_ID" = site) %>% 
+  rename(field_check_m = chk_m,
+         logger_val_m = logger_date_mean_trimmed)
+output_checks <- bind_rows(output_checks, checks_final)
+
+rm(site, data, qaqc, pivot_history, 
+   status, data_full, data_out, checks_final) 
+
+rm(offsets_to_use, new_offset, offset_cols_to_use, 
+   offset_dates_to_use, offset_names_to_use, offset_vals_use)
+rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
+   all_offset_names, all_offsets, checks, depth_cols)
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # WRITE OUTPUT DATA & CHECKS-------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -5988,8 +6199,15 @@ output_data <- output_data %>%
   ) %>% 
   select(-basin_id)
 
-write_csv(output_checks, './data/out_data/well_checks_log_Spring2025.csv')
-write_csv(output_data, './data/out_data/waterlevel_offsets_tracked_Spring2025.csv')
+write_csv(
+  output_checks, 
+  'D:/doe_pt_processing/data_bradford/out_data/well_checks_log_Spring2025.csv'
+)
+
+write_csv(
+  output_data, 
+  'D:/doe_pt_processing/data_bradford/out_data/waterlevel_offsets_tracked_Spring2025.csv'
+)
 
 
 
