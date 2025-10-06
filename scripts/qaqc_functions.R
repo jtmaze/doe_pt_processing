@@ -77,6 +77,17 @@ make_site_ts <- function(site_ts,
                          qaqc_df = NULL, 
                          trace_names = NULL) {
   
+  site_ts <- site_ts %>% 
+    mutate(Date = as.Date(Date)) %>%
+    arrange(Date)
+  
+  full_dates <- seq(min(site_ts$Date, na.rm = TRUE),
+                    max(site_ts$Date, na.rm = TRUE),
+                    by = "day")
+  
+  site_full <- site_ts %>%
+    tidyr::complete(Date = full_dates)
+  
   # Get site ID
   if ("Site_ID" %in% names(site_ts)) {
     site_id <- site_ts %>%
@@ -97,12 +108,13 @@ make_site_ts <- function(site_ts,
     
     fig <- fig %>%
       add_trace(
-        data = site_ts,
+        data = site_full,
         x = ~Date,
         y = as.formula(paste0("~", y_var)),
         name = name,
         type = "scatter",
-        mode = "lines"
+        mode = "lines", 
+        connectgaps = FALSE
       )
   }
   

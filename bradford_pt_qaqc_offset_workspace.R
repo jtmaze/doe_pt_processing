@@ -12,12 +12,11 @@ source("./scripts/qaqc_functions.R")
 source("./scripts/data_read_functions.R")
 
 # Path to original data containing depth and water depth
-compiled_path <-'D:/doe_pt_processing/data_bradford/compiled_data_to_check_offsets.xlsx'
+compiled_path <-'D:/doe_pt_processing/data_bradford/compiled_data_to_check_offsets_fall2025.xlsx'
 # Path to wetland well metadata.
 # Contains field measurements for water level and well dimensions 
 meta_data_path <- 'D:/doe_pt_processing/data_bradford/Wetland_well_metadata_JM.xlsx'
 status_path <- 'D:/doe_pt_processing/data_bradford/Post_Processing_Well_Status.xlsx'
-
 
 unique_wetland_wells <- read_excel(meta_data_path, sheet="Wetland_and_well_info") %>%
   pull('Site_ID') %>%
@@ -89,7 +88,6 @@ all_offset_cols <- c(all_offset_dates, all_offset_names)
 all_offsets <- pivot_history %>% 
   select(all_of(all_offset_cols))
 quick_plot_offset2(all_offsets)
-
 
 ## ------- C Revise water depth -----------------------------------------
 
@@ -3592,7 +3590,6 @@ rm(offsets_to_use, new_offset, offset_cols_to_use,
    offset_dates_to_use, offset_names_to_use, offset_vals_use)
 rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
    all_offset_names, all_offsets, checks, depth_cols)
-
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # XXXIII) Site: 5_560-------------------------------------------------------

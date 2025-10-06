@@ -6,8 +6,11 @@ library(readxl)
 library(writexl)
 library(openxlsx)
 
-raw_dir <- 'D:/doe_pt_processing/data_bradford/raw_files_F24-W25/spring_2025_batch/'
+raw_dir <- 'D:/doe_pt_processing/data_bradford/raw_files_F24-W25/fall_2025_batch/'
 raw_files <- list.files(path=raw_dir, pattern='LL.csv', full.names=TRUE)
+meta_path <- 'D:/doe_pt_processing/data_bradford/Wetland_well_metadata_JM.xlsx'
+previous_data_path <- "D:/doe_pt_processing/data_bradford/compiled_data_to_check_offsets_spring2025.xlsx"
+output_path <- "D:/doe_pt_processing/data_bradford/compiled_data_to_check_offsets_fall2025.xlsx"
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # 2.0 Compile all the latest downloads (csv files) -------------------------------------------------------
@@ -85,10 +88,10 @@ combined_raw_files <- assign_baro(combined_raw_files)
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 missing_sites = c('13_274', '5_546', '7_622') # TODO: Figure out what is happening here
-missing_df <- read_csv('D:/doe_pt_processing/data_bradford/archive_files/compiled_PT.csv') %>% 
+missing_df <- read_csv('D:/doe_pt_processing/data_bradford/archive_files/compiled_PT.csv') %>%
   mutate(WetlandID = as.character(WetlandID),
-         Site_ID = paste(BasinID, WetlandID, sep='_')) %>% 
-  filter(Site_ID %in% missing_sites) %>% 
+         Site_ID = paste(BasinID, WetlandID, sep='_')) %>%
+  filter(Site_ID %in% missing_sites) %>%
   rename(baro_region = region)
 
 combined_raw_files <- bind_rows(combined_raw_files, missing_df)
@@ -134,11 +137,39 @@ baro_data <- read_csv(paste0(baro_dir, 'compiled_baro.csv')) %>%
   distinct() %>% # For some reason there were lots of duplicate baro observations for a given date and region
   select(-`Temp.air`)
 
+
+library(plotly)
+p <- plot_ly(
+  data = baro_data,
+  x = ~Date,
+  y = ~PTbaro,
+  color = ~baro_region,
+  type = "scattergl",    # WebGL for speed with large data
+  mode = "lines",
+  hovertemplate = paste(
+    "<b>%{x}</b><br>",
+    "PTbaro: %{y}<br>",
+    "Region: %{curveNumber}<extra></extra>"
+  )
+)
+p
+
+baro_data <- baro_data %>%
+  filter(!(baro_region == "N" & Date < as.Date("2022-06-14")))
+
+
+# 1) Add rounded-to-nearest-hour timestamp
+baro_hourly <- baro_data %>%
+  mutate(rounded_hour = round_date(Date, unit = "hour")) %>% 
+# 2) Hourly mean per region
+  group_by(rounded_hour) %>%
+  summarise(PTbaro = mean(PTbaro, na.rm = TRUE), .groups = "drop") %>% 
+  rename(Date = rounded_hour)
   
 combined_raw_files <- left_join(
   combined_raw_files, 
-  baro_data, 
-  by=c('baro_region', 'Date'),
+  baro_hourly, 
+  by=c('Date'),
   relationship = 'many-to-many'
 )
 
@@ -161,7 +192,7 @@ compiled_pt_data <- calc_water_height(combined_raw_files)
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 wetland_well_meta <- read_excel(
-  'D:/doe_pt_processing/data_bradford/Wetland_well_metadata_JM.xlsx', 
+  meta_path, 
   sheet = "Wetland_pivot_history"
 )
 
@@ -225,7 +256,6 @@ compiled_pt_data <- compiled_pt_data %>%
   select(Date, Site, BasinID, water_press, sensor_depth, depth, PT, PTbaro, PG, PL)
 
 # Read the previous data
-previous_data_path <- "D:/doe_pt_processing/data_bradford/compiled_stage_prior_2025_notJM.xlsx"
 sheet_names <- excel_sheets(previous_data_path)
 previous_dfs <- lapply(sheet_names, function(sheet) {
   read_excel(previous_data_path, sheet=sheet)
@@ -245,9 +275,6 @@ rm(previous_dfs)
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ## 7.1 Calculate water depth in old data with adjusted -------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# NOTE: I'm recalculating water depth for pre-existing data, 
-# because there was a suspect baro measurement from January 7th 2022 until 
-# April 9th 2022 for sites using the South baro logger.
 
 previous <- previous %>% 
   select(c("Date", "Site", "BasinID", "PT", "PG", "PL")) %>% 
@@ -257,8 +284,8 @@ previous <- assign_baro(previous)
 
 previous <- left_join(
   previous, 
-  baro_data, 
-  by=c('baro_region', 'Date'),
+  baro_hourly, 
+  by=c('Date'),
   relationship = 'many-to-many'
 )
 
@@ -282,7 +309,7 @@ compiled_pt_data <- bind_rows(compiled_pt_data, previous) %>%
 sheet_list <- split(compiled_pt_data, compiled_pt_data$Site)
 write.xlsx(
   sheet_list, 
-  "D:/doe_pt_processing/data_bradford/compiled_data_to_check_offsets.xlsx"
+  output_path
 )
 
 
