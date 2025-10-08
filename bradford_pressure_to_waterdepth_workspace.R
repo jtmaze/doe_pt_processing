@@ -10,7 +10,7 @@ raw_dir <- 'D:/doe_pt_processing/data_bradford/raw_files_F24-W25/fall_2025_batch
 raw_files <- list.files(path=raw_dir, pattern='LL.csv', full.names=TRUE)
 meta_path <- 'D:/doe_pt_processing/data_bradford/Wetland_well_metadata_JM.xlsx'
 previous_data_path <- "D:/doe_pt_processing/data_bradford/compiled_data_to_check_offsets_spring2025.xlsx"
-output_path <- "D:/doe_pt_processing/data_bradford/compiled_data_to_check_offsets_fall2025.xlsx"
+output_path <- "D:/doe_pt_processing/data_bradford/compiled_data_to_check_offsets_fall2025_BAROSHIFT_DOWN4.xlsx"
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # 2.0 Compile all the latest downloads (csv files) -------------------------------------------------------
