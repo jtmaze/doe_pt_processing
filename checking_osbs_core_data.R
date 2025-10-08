@@ -1,12 +1,15 @@
+# This scripts purpose is to compile and view the OSBS stage data sent by Josh E.
+# Essentially, I rename columns to avoid special cases, check the time series, and 
+# concatenate everything into .csv instead of an excel workbook. 
 
-# 1.0 Libraries and filepaths ---------------------------------------------
+# 1.0 Libraries and file paths --------------------------------------------
 
 library(tidyverse)
 library(readxl)
 library(stringr)
 source('./scripts/qaqc_functions.R')
 
-stage_dir <- "D:/depressional_lidar/data/osbs/in_data/stage_data/osbs_core_stage_data_unrevised.xlsx"
+stage_dir <- "D:/doe_pt_processing/data_ordway/uncleaned_osbs_core_wells_2018_2025.xlsx"
 
 # 2.0 Data read and cleaning ----------------------------------------------
 
@@ -37,6 +40,10 @@ select_clean_cols <- function(df, site_name) {
 
 
 find_offset_begin_end <- function(stage_df, offset_df, well_id_filter) {
+  
+  # Checks the difference between head above PT and water depth relative to 
+  # ground surface. Essentially, I want to ensure we are not arbitrarily changing
+  # the well datum. 
   
   ranges <- stage_df %>%
     filter(!is.na(offset_val)) %>% 
@@ -213,7 +220,7 @@ brantley_north <- brantley_north %>%
     )
   )
 
-# NOTE adjusting later depth based on site notes
+# NOTE adjusting later depth based on site notes from Josh
 p_g <- 0.48
 p_l <- 1.28
 offset <- p_l - p_g
@@ -252,7 +259,6 @@ surprise <- select_clean_cols(surprise, 'Surprise Pond')
 tz = attr(surprise$Date, 'tzone')
 make_site_ts(surprise, y_var='max_depth_m')
 
-
 offset_val <- unique(surprise$offset_val)
 offset_val <- Filter(Negate(is.na), offset_val)
 versions <- seq(from=1, to=length(offset_val), by=1)
@@ -277,6 +283,7 @@ surprise <- surprise %>%
     )
   )
 
+# Had to adjust offset values to keep well datum consistent after the gator damage.
 offset_June24_curr <- 0.61
 offset_Oct23_Jun24 <- 0.65
 offset_Sept23_Oct23 <- 1.25
@@ -293,6 +300,8 @@ surprise_clean <- surprise %>%
       Date < as.POSIXct('2023-09-01 8:00:00', tz='UTC') ~ head_m - offset_Mar22_Sep23
     )
   )
+
+make_site_ts(surprise_clean, 'well_depth_m')
   
 rm(offset_June24_curr, offset_Oct23_Jun24, offset_Sept23_Oct23, offset_Mar22_Sep23)  
 
@@ -315,7 +324,6 @@ west_ford <- read_xlsx(
 west_ford <- select_clean_cols(west_ford, 'West Ford')
 tz = attr(west_ford$Date, 'tzone')
 make_site_ts(west_ford, y_var='max_depth_m')
-
 
 offset_val <- unique(west_ford$offset_val)
 offset_val <- Filter(Negate(is.na), offset_val)
@@ -345,6 +353,7 @@ west_ford_clean <- west_ford %>%
   filter(Date >= as.POSIXct('2020-10-6 17:00:00')) %>% 
   select(c('Date', 'well_id', 'well_depth_m', 'max_depth_m', 'offset_val', 'flag'))
   
+make_site_ts(west_ford_clean, 'well_depth_m')
 
 #...2.6 Fish Cove -------------------------------------------------------
 
@@ -399,6 +408,7 @@ fish_cove_clean <- fish_cove %>%
   filter(Date >= as.POSIXct('2022-03-03 12:00:00')) %>% 
   select(c('Date', 'well_id', 'well_depth_m', 'max_depth_m', 'offset_val', 'flag'))
 
+make_site_ts(fish_cove_clean, 'well_depth_m')
 
 #3.0 Compile the cleaned data -------------------------------------------------------
 
@@ -444,11 +454,10 @@ id_map <- c(
   "Fishcove"       = "Fish Cove"
 )
 
-# remap well_id in your dataframe (df)
+# remap well_id
 output <- output %>%
   mutate(well_id = recode(well_id, !!!id_map))
 
-
-output_path <- 'D:/depressional_lidar/data/osbs/in_data/stage_data/osbs_core_wells_tracked_datum.csv'
+output_path <- 'D:/doe_pt_processing/data_ordway/clean_osbs_core_wells_pre2025.csv'
 write_csv(output, output_path)
 
