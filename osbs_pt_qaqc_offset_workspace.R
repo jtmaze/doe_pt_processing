@@ -7,6 +7,7 @@ source("./scripts/qaqc_functions.R")
 
 previous_path <- "D:/doe_pt_processing/data_ordway/clean_osbs_core_wells_pre2025.csv"
 latest_path <- "D:/doe_pt_processing/data_ordway/fall2025_downloads_to_check_offset.csv"
+output_path <- "D:/doe_pt_processing/data_ordway/output/fall2025_processed_well_depth.csv"
 
 master_df <- read_csv(previous_path) %>% 
   rename(Date = date) %>% 
@@ -121,9 +122,29 @@ make_site_ts(master_df %>% filter(well_id == 'Fish Cove'), y_vars='water_level')
 
 rm(temp)
 
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# VI) Plot all timeseries together -------------------------------------------------------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+df_daily <- master_df %>%             
+  mutate(Date = as.Date(Date)) %>%      # daily resolution
+  filter(Date >= ymd('2022-03-03')) %>% 
+  group_by(Date, well_id) %>%
+  summarize(water_level = mean(water_level, na.rm = TRUE), .groups = "drop")
 
 
+p_facets <- ggplot(df_daily, aes(x = Date, y = water_level)) +
+  geom_line() +
+  facet_wrap(~ well_id, scales = "free_y", ncol = 2) +
+  labs(title = "Water level at well", x = "Date", y = "Well Depth (m)") +
+  theme_minimal()
 
+print(p_facets)
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Write the output file -------------------------------------------------------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+write_csv(master_df, output_path)
 
 
 

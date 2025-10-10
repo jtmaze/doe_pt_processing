@@ -4,7 +4,7 @@ library(tidverse)
 raw_data_dir <- "D:/doe_pt_processing/data_ordway/raw_files/"
 baro_dir <- "D:/doe_pt_processing/data_ordway/baro_files/"
 output_path <- "D:/doe_pt_processing/data_ordway/fall2025_downloads_to_check_offset.csv"
-raw_files <- list.files(path=raw_data_dir, pattern='LL.csv', full.names=TRUE)
+raw_files <- list.files(path=raw_data_dir, pattern='LL', full.names=TRUE)
 baro_files <- list.files(path=baro_dir, pattern='.csv', full.names=TRUE)
 
 # 2.0 Concatenate the raw files and baro files --------------------------------------------

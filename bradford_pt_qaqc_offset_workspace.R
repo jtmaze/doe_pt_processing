@@ -151,7 +151,7 @@ data_full <- data_full %>%
 # Remove anomalous values
 data_full <- anomaly_remover(data_full, revised_depth_col='revised_depth')
 make_site_ts(site_ts=data_full,
-             y_vars=c("original_depth", "revised_depth"),
+             y_vars=c("revised_depth"),
              qaqc)
 
 # Note the bottoming out depth with flag = 2
@@ -3219,7 +3219,7 @@ data_full <- data_full %>%
 data_full <- anomaly_remover(data_full, 'revised_depth')
 
 make_site_ts(site_ts=data_full,
-             y_vars=c("original_depth", "revised_depth"),
+             y_vars=c("revised_depth"),
              qaqc)
 
 # Note the bottom-out depth with flag = 2
@@ -6196,16 +6196,27 @@ output_data <- output_data %>%
   ) %>% 
   select(-basin_id)
 
+output_data <- output_data %>% 
+  rename(well_id = Site_ID)
+
 write_csv(
   output_checks, 
-  'D:/doe_pt_processing/data_bradford/out_data/well_checks_log_Spring2025.csv'
+  'D:/doe_pt_processing/data_bradford/out_data/well_checks_log_Fall2025.csv'
 )
 
 write_csv(
   output_data, 
-  'D:/doe_pt_processing/data_bradford/out_data/waterlevel_offsets_tracked_Spring2025.csv'
+  'D:/doe_pt_processing/data_bradford/out_data/waterlevel_offsets_tracked_Fall2025.csv'
 )
 
+output_data_small <- output_data %>% 
+  rename(well_depth = revised_depth) %>% 
+  select(c(Date, well_id, well_depth, flag))
+
+write_csv(
+  output_data_small, 
+  'D:/doe_pt_processing/data_bradford/out_data/waterlevel_Fall2025.csv'
+)
 
 
 

@@ -113,8 +113,8 @@ make_site_ts <- function(site_ts,
         y = as.formula(paste0("~", y_var)),
         name = name,
         type = "scatter",
-        mode = "lines", 
-        connectgaps = FALSE
+        mode = "markers"
+        #connectgaps = FALSE
       )
   }
   
