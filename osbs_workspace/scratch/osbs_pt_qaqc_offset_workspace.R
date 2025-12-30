@@ -6,7 +6,7 @@ library("plotly")
 source("./scripts/qaqc_functions.R")
 
 previous_path <- "D:/doe_pt_processing/data_ordway/clean_osbs_core_wells_pre2025.csv"
-latest_path <- "D:/doe_pt_processing/data_ordway/fall2025_downloads_to_check_offset.csv"
+latest_path <- "D:/doe_pt_processing/data_ordway/temp/fall2025_downloads_to_check_offset.csv"
 output_path <- "D:/doe_pt_processing/data_ordway/output/fall2025_processed_well_depth.csv"
 
 master_df <- read_csv(previous_path) %>% 

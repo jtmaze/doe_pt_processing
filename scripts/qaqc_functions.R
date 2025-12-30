@@ -51,7 +51,7 @@ anomaly_remover <- function(df, revised_depth_col) {
 
 calc_stages_from_offsets <- function(ts_data, pivot_history){
   
-  data_full <- merge(ts_data, pivot_history, by="Site_ID", all=TRUE) %>% 
+  data_full <- merge(ts_data, pivot_history, by="well_id", all=TRUE) %>% 
     # P to G and P to L columns are redundant, bc offsets are calculated. 
     select(
       -matches("^P_[LG]_cm_")
@@ -60,14 +60,14 @@ calc_stages_from_offsets <- function(ts_data, pivot_history){
     mutate(
       across(
         matches("^offset_m_(\\d+)$"), 
-        ~ sensor_depth - .,
+        ~ head_m - .,
         .names = "depth_v{gsub('offset_m_', '', .col)}"
       )
     ) %>% 
     # 3) Calculate the average offset across all offset_m_N columns
     mutate(
       offset_avg = rowMeans(across(matches("^offset_m_(\\d+)$")), na.rm = TRUE),
-      depth_avg  = sensor_depth - offset_avg
+      depth_avg  = head_m - offset_avg
     )
   return(data_full)
 }
@@ -77,26 +77,38 @@ make_site_ts <- function(site_ts,
                          qaqc_df = NULL, 
                          trace_names = NULL) {
   
-  site_ts <- site_ts %>% 
-    mutate(Date = as.Date(Date)) %>%
-    arrange(Date)
+  # Resolve x variable
+  if ("timestamp" %in% names(site_ts)) {
+    site_ts <- site_ts %>% mutate(x = as.POSIXct(timestamp))
+  } else if ("date" %in% names(site_ts)) {
+    site_ts <- site_ts %>% mutate(x = as.POSIXct(date))
+  } else {
+    stop("site_ts must contain either 'timestamp' or 'date'")
+  }
   
-  full_dates <- seq(min(site_ts$Date, na.rm = TRUE),
-                    max(site_ts$Date, na.rm = TRUE),
-                    by = "day")
-  
-  site_full <- site_ts %>%
-    tidyr::complete(Date = full_dates)
-  
-  # Get site ID
-  if ("Site_ID" %in% names(site_ts)) {
-    site_id <- site_ts %>%
-      pull(Site_ID) %>%
+  # Get well_id
+  if ("well_id" %in% names(site_ts)) {
+    well_id <- site_ts %>%
+      pull(well_id) %>%
       unique()
-    site_label <- paste(site_id, collapse = ", ")
+    site_label <- paste(well_id, collapse = ", ")
   } else {
     site_label <- "Site Not Specified"
   }
+  
+  # Ensure gaps aren't connected by lines and group by
+  # day to help rendering
+  site_ts <- site_ts %>% arrange(x)
+  
+  site_ts <- site_ts %>%
+    mutate(day = as.Date(x)) %>%
+    group_by(day) %>%
+    summarise(
+      across(all_of(y_vars), ~ mean(.x, na.rm = TRUE)),
+      .groups = "drop"
+    ) %>%
+    mutate(x = as.POSIXct(day))
+  
   
   # Initialize plot
   fig <- plot_ly()
@@ -108,13 +120,14 @@ make_site_ts <- function(site_ts,
     
     fig <- fig %>%
       add_trace(
-        data = site_full,
-        x = ~Date,
+        data = site_ts,
+        x = ~x,
         y = as.formula(paste0("~", y_var)),
         name = name,
         type = "scatter",
-        mode = "markers"
-        #connectgaps = FALSE
+        mode = "lines",
+        marker = list(size=4),
+        connectgaps = TRUE
       )
   }
   
@@ -151,8 +164,10 @@ calculate_chk_ts_diffs <- function(ts, qaqc_df, version){
     obs_date <- qaqc_df$date[i]
     chk_m <- qaqc_df$meter[i]
     logger_date <- ts %>% 
-      mutate(Date_only = as.Date(Date)) %>% 
-      filter(Date_only == obs_date) %>% 
+      mutate(Date_only = as.Date(timestamp)) %>% 
+      # Extract +-1 day incase download day was deleted. 
+      filter(Date_only >= obs_date - lubridate::days(2),
+             Date_only <= obs_date + lubridate::days(2)) %>% 
       pull(!!sym(version))
     
     # Handle cases where there's no logger data
@@ -170,8 +185,14 @@ calculate_chk_ts_diffs <- function(ts, qaqc_df, version){
     # The date's mean omits observatoins +-2 sd to prevent this
     logger_date_mean <- mean(logger_date, na.rm=TRUE)
     logger_date_sd <- sd(logger_date, na.rm=TRUE)
-    trimmed <- logger_date[abs(logger_date - logger_date_mean) <= 2 * logger_date_sd]
-    logger_date_mean_trimmed <- mean(trimmed)
+    if (is.na(logger_date_sd) || logger_date_sd == 0) {
+      logger_date_mean_trimmed <- logger_date_mean
+    } else {
+      trimmed <- logger_date[
+        abs(logger_date - logger_date_mean) <= 2 * logger_date_sd
+      ]
+      logger_date_mean_trimmed <- mean(trimmed, na.rm = TRUE)
+    }
     
     diff <- chk_m - logger_date_mean_trimmed
     results_list[[i]] <- tibble(
@@ -183,7 +204,7 @@ calculate_chk_ts_diffs <- function(ts, qaqc_df, version){
     )
   }
   
-  df <- bind_rows(results_list)
+  df <- bind_rows(results_list) 
   return(df)
 }
 
@@ -191,10 +212,10 @@ make_checks_df <- function(data_full, qaqc){
   
   all_cols <- colnames(data_full)
   v_cols <- grep("depth_v", all_cols, value=TRUE)
-  check_cols <- c(v_cols, "original_depth", "depth_avg")
+  check_cols <- c(v_cols, "original_depth_m", "depth_avg")
   
-  if ("revised_depth" %in% all_cols) {
-    check_cols <- c(check_cols, "revised_depth")
+  if ("well_depth_m" %in% all_cols) {
+    check_cols <- c(check_cols, "well_depth_m")
   }
 
   checks_list <- vector("list", length(check_cols))
@@ -333,8 +354,8 @@ quick_plot_offset2 <- function(offsets_to_use){
       axis.text  = element_text(face = "bold", size=12),
       
       # Make gridlines thicker
-      panel.grid.major = element_line(size = 1),  # Adjust size for major gridlines
-      panel.grid.minor = element_line(size = 0.5) # Adjust size for minor gridlines (if present)
+      panel.grid.major = element_line(linewidth = 1),  # Adjust size for major gridlines
+      panel.grid.minor = element_line(linewidth = 0.5) # Adjust size for minor gridlines (if present)
     ) +
     # Ensure "Mean" appears on the x-axis after all numeric indices
     scale_x_discrete(limits = c(unique(combined$offset_id), "Mean"))

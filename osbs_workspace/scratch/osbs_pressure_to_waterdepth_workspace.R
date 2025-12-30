@@ -3,7 +3,7 @@
 library(tidverse)
 raw_data_dir <- "D:/doe_pt_processing/data_ordway/raw_files/"
 baro_dir <- "D:/doe_pt_processing/data_ordway/baro_files/"
-output_path <- "D:/doe_pt_processing/data_ordway/fall2025_downloads_to_check_offset.csv"
+write_dir <- "D:/doe_pt_processing/data_ordway/temp/fall2025_downloads_to_check_offset.csv"
 raw_files <- list.files(path=raw_data_dir, pattern='LL', full.names=TRUE)
 baro_files <- list.files(path=baro_dir, pattern='.csv', full.names=TRUE)
 
@@ -53,8 +53,8 @@ combined_raw_files <- combined_raw_files %>%
          sensor_depth = 1000 * p_gauge / 2.2 /(2.54^2) / 100) %>% 
   select(-c(p_gauge, baro_psi, PT))
 
-# 5.0 Write the depth dataframe to check offsets in next file -------------------
+# 5.0 Write the depth dataframe to check offsets later -------------------
 
-write_csv(combined_raw_files, output_path)
+write_csv(combined_raw_files, write_dir)
   
 

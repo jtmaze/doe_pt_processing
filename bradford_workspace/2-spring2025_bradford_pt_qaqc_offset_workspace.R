@@ -1,7 +1,9 @@
+# This file checks the dimensions for the wells and ensures consistent offset values. 
+# This is the workflow that I used to compile the Spring 2025 data, going forward,
+# there's a more streamlined processs.
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Libraries & File Paths -------------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
 library('tidyverse')
 library('plotly')
 library('glue')
@@ -12,11 +14,12 @@ source("./scripts/qaqc_functions.R")
 source("./scripts/data_read_functions.R")
 
 # Path to original data containing depth and water depth
-compiled_path <-'D:/doe_pt_processing/data_bradford/compiled_data_to_check_offsets_fall2025.xlsx'
+compiled_path <-'D:/doe_pt_processing/data_bradford/temp/compiled_data_to_check_offsets_spring2025.xlsx'
 # Path to wetland well metadata.
 # Contains field measurements for water level and well dimensions 
 meta_data_path <- 'D:/doe_pt_processing/data_bradford/Wetland_well_metadata_JM.xlsx'
 status_path <- 'D:/doe_pt_processing/data_bradford/Post_Processing_Well_Status.xlsx'
+out_dir <- 'D:/doe_pt_processing/data_bradford/output_data/'
 
 unique_wetland_wells <- read_excel(meta_data_path, sheet="Wetland_and_well_info") %>%
   pull('Site_ID') %>%
@@ -26,11 +29,11 @@ print(unique_wetland_wells)
 
 # Make output dataframe and define columns
 output_data <- tibble(
-  Date = as.POSIXct(character()), 
-  Site_ID = character(),
-  sensor_depth = numeric(),
-  original_depth = numeric(),
-  revised_depth = numeric(), 
+  timestamp = as.POSIXct(character()), 
+  well_id = character(),
+  head_m = numeric(),
+  original_depth_m = numeric(),
+  well_depth_m = numeric(), 
   offset_value = numeric(),
   offset_version = character(),
   flag = int(),
@@ -39,11 +42,11 @@ output_data <- tibble(
 
 output_checks <- tibble(
   version = character(),
-  date = as.POSIXct(character()),
+  timestamp = as.POSIXct(character()),
   diff = numeric(),
   field_check_m = numeric(),
   logger_val_m = numeric(),
-  Site_ID = character()
+  well_id = character()
 )
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -68,9 +71,7 @@ print(status$Notes)
 data_full <- calc_stages_from_offsets(data, pivot_history)
 # Select columns to plot
 all_cols <- colnames(data_full)
-depth_cols <- grep('depth', all_cols, value=TRUE)
-not_to_plot <- c("sensor_depth")
-ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+ts_cols <- grep('depth', all_cols, value=TRUE)
 print(ts_cols)
 
 # Make plots
@@ -102,9 +103,9 @@ offsets_to_use1 <- pivot_history %>%
 offset_vals_use1 <- offsets_to_use1 %>% select(all_of(offset_names_to_use1))
 
 ### !!!!!!! offset V2 !!!!!!!!!!!!!!!!!
-offset_names_to_use2 <- "Custom1"
+offset_names_to_use2 <- "Custom2"
 ### !!!!!!! offset V3 !!!!!!!!!!!!!!!!!
-offset_names_to_use3 <- "Custom2"
+offset_names_to_use3 <- "Custom3"
 
 new_offset1 <- offset_vals_use1 %>%  unlist() %>% mean(na.rm = TRUE)
 new_offset2 <- 0.53
@@ -115,49 +116,45 @@ data_full <- data_full %>%
   # Apply offset #2 between January 15th 2022 and April 15th 2022
   # Apply offset #3 after April 16th 2022
   # Delete data in these ranges [January 15th 2022-January 16th 2022] AND [April 14th 2022 - April 16th 2022]
-  filter(
-    !(Date >= as.Date("2022-01-15") & Date <= as.Date("2022-01-16")),
-    !(Date >= as.Date("2022-04-14") & Date <= as.Date("2022-04-16"))
-  ) %>%
   mutate(
     offset_version = case_when(
-      Date < as.Date("2022-01-15") ~ offset_names_to_use1,  # offset #1
-      Date >= as.Date("2022-01-17") & Date <= as.Date("2022-04-13") ~ offset_names_to_use2,  # offset #2
-      Date >= as.Date("2022-04-17") ~ offset_names_to_use3,  # offset #3
+      timestamp < as.POSIXct("2022-01-15") ~ offset_names_to_use1,  # offset #1
+      timestamp >= as.POSIXct("2022-01-17") & timestamp <= as.POSIXct("2022-04-13") ~ offset_names_to_use2,  # offset #2
+      timestamp >= as.POSIXct("2022-04-17") ~ offset_names_to_use3,  # offset #3
       TRUE ~ NA_character_
     ),
     offset_value = case_when(
-      Date < as.Date("2022-01-15") ~ new_offset1,
-      Date >= as.Date("2022-01-17") & Date <= as.Date("2022-04-13") ~ new_offset2,
-      Date >= as.Date("2022-04-17") ~ new_offset3,
+      timestamp < as.POSIXct("2022-01-15") ~ new_offset1,
+      timestamp >= as.POSIXct("2022-01-17") & timestamp <= as.POSIXct("2022-04-13") ~ new_offset2,
+      timestamp >= as.POSIXct("2022-04-17") ~ new_offset3,
       TRUE ~ NA_real_
     ),
     flag = case_when(
-      Date < as.Date("2022-01-15") ~ 0,
-      Date >= as.Date("2022-01-17") & Date <= as.Date("2022-04-13") ~ 1,
-      Date >= as.Date("2022-04-17") ~ 0,
+      timestamp < as.POSIXct("2022-01-15") ~ 0,
+      timestamp >= as.POSIXct("2022-01-17") & timestamp <= as.POSIXct("2022-04-13") ~ 1,
+      timestamp >= as.POSIXct("2022-04-17") ~ 0,
     ),  # or vary by range if desired
     notes = case_when(
-      Date < as.Date("2022-01-15") ~ "Original Well",
-      Date >= as.Date("2022-01-17") & Date <= as.Date("2022-04-13") ~ "PT Knocked over in wetland",
-      Date >= as.Date("2022-04-17") ~ "New Well",
+      timestamp < as.POSIXct("2022-01-15") ~ "Original Well",
+      timestamp >= as.POSIXct("2022-01-17") & timestamp <= as.POSIXct("2022-04-13") ~ "PT Knocked over in wetland",
+      timestamp >= as.POSIXct("2022-04-17") ~ "New Well",
       TRUE ~ NA_character_
     ),
-    revised_depth = sensor_depth - offset_value
+    well_depth_m = head_m - offset_value
   )
 
 ## ------- D Plot the data with a revised offset -----------------------
 
 # Remove anomalous values
-data_full <- anomaly_remover(data_full, revised_depth_col='revised_depth')
+data_full <- anomaly_remover(data_full, 'well_depth_m')
 make_site_ts(site_ts=data_full,
-             y_vars=c("revised_depth"),
+             y_vars=c("original_depth_m", "well_depth_m"),
              qaqc)
 
 # Note the bottoming out depth with flag = 2
 data_full <- data_full %>% 
   mutate(flag = if_else(
-    revised_depth <= -0.60,
+    well_depth_m <= -0.59,
     2,
     flag
   )
@@ -166,8 +163,8 @@ data_full <- data_full %>%
 data_out <- data_full %>% 
   select(
     c(
-      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
-      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+      'well_id', 'timestamp', 'head_m', 'original_depth_m', 
+      'depth_avg', 'well_depth_m', 'offset_version', 'offset_value', 'flag', 'notes'
       )
   )
 
@@ -183,7 +180,7 @@ output_data <- bind_rows(output_data, data_out)
 
 # Add checks to output
 checks_final <- checks_final %>%
-  mutate("Site_ID" = site) %>% 
+  mutate("well_id" = site) %>% 
   rename(field_check_m = chk_m,
          logger_val_m = logger_date_mean_trimmed)
 output_checks <- bind_rows(output_checks, checks_final)
@@ -191,13 +188,11 @@ output_checks <- bind_rows(output_checks, checks_final)
 rm(site, data, qaqc, pivot_history, 
    status, data_full, data_out, checks_final) 
 
-rm(offsets_to_use1, offsets_to_use2, new_offset1, new_offset2,
-   offset_cols_to_use1, offset_cols_to_use2, offset_dates_to_use1,
-   offset_dates_to_use2, offset_names_to_use1, offset_names_to_use2,
-   offset_vals_use1, offset_vals_use2,
-   new_offset3, offset_names_to_use3)
-rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
-   all_offset_names, all_offsets, checks, depth_cols)
+rm(offsets_to_use1, new_offset1, new_offset2, offset_cols_to_use1, 
+   offset_dates_to_use1, offset_names_to_use1, offset_names_to_use2,
+   offset_vals_use1, new_offset3, offset_names_to_use3)
+rm(ts_cols, all_cols, all_offset_cols, all_offset_dates,
+   all_offset_names, all_offsets, checks)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # II) Site: 13_267 -------------------------------------------------------
@@ -215,15 +210,14 @@ print(status$Notes)
 data_full <- calc_stages_from_offsets(data, pivot_history)
 # Select columns to plot
 all_cols <- colnames(data_full)
-depth_cols <- grep('depth', all_cols, value=TRUE)
-not_to_plot <- c("sensor_depth")
-ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+ts_cols <- grep('depth', all_cols, value=TRUE)
 print(ts_cols)
 
 # Make plots
 make_site_ts(site_ts=data_full, 
              y_vars = ts_cols, 
              qaqc_df = qaqc)
+
 # Plot checks
 checks <- make_checks_df(data_full, qaqc)
 plot_checks(checks, site)
@@ -245,8 +239,6 @@ print(all_offsets)
 # Choose offset "offset_m_2"
 offset_names_to_use <- all_offset_names[all_offset_names == "offset_m_2"]
 offset_dates_to_use <- all_offset_dates[all_offset_dates == "P_G/L_date_2"]
-# offset_names_to_use <- all_offset_names[all_offset_names %in% c("offset_m_2", 'offset_m_3')]
-# offset_dates_to_use <- all_offset_dates[all_offset_dates %in% c("P_G/L_date_2", "P_G/L_date_3")]
 
 offset_cols_to_use  <- c(offset_names_to_use, offset_dates_to_use)
 
@@ -266,7 +258,7 @@ data_full <- data_full %>%
   mutate(
     offset_version = offset_string,           
     offset_value   = new_offset,            
-    revised_depth  = sensor_depth - offset_value,
+    well_depth_m  = head_m - offset_value,
     flag           = 0,                      
     notes          = NA_character_           
   )
@@ -274,28 +266,27 @@ data_full <- data_full %>%
 ## ------- D Plot the data with a revised offset -----------------------
 
 # Run the anomaly remover
-data_full <- anomaly_remover(data_full, 'revised_depth')
+data_full <- anomaly_remover(data_full, 'well_depth_m')
 
 make_site_ts(site_ts=data_full,
-             y_vars=c("original_depth", "revised_depth"),
+             y_vars=c("original_depth_m", "well_depth_m"),
              qaqc)
 
 # Note bottoming out-depth flag=2
 data_full <- data_full %>% 
   mutate(
     flag = if_else(
-      revised_depth <= -0.95,
+      well_depth_m <= -0.93,
       2,
       flag
     )
 )
   
-
 data_out <- data_full %>% 
   select(
     c(
-      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
-      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+      'well_id', 'timestamp', 'head_m', 'original_depth_m', 
+      'depth_avg', 'well_depth_m', 'offset_version', 'offset_value', 'flag', 'notes'
     )
   )
 
@@ -311,16 +302,16 @@ output_data <- bind_rows(output_data, data_out)
 
 # Add checks to output
 checks_final <- checks_final %>%
-  mutate("Site_ID" = site) %>% 
+  mutate("well_id" = site) %>% 
   rename(field_check_m = chk_m,
          logger_val_m = logger_date_mean_trimmed)
 output_checks <- bind_rows(output_checks, checks_final)
 
 rm(site, data, qaqc, pivot_history, status, 
    checks_final, data_full, data_out) 
-rm(offsets_to_use, new_offset, offset_cols_to_use, 
+rm(offsets_to_use, new_offset, offset_cols_to_use, offset_string,
    offset_dates_to_use, offset_names_to_use, offset_vals_use)
-rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
+rm(ts_cols, all_cols, all_offset_cols, all_offset_dates,
    all_offset_names, all_offsets, checks, depth_cols)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -339,9 +330,7 @@ print(status$Notes)
 data_full <- calc_stages_from_offsets(data, pivot_history)
 # Select columns to plot
 all_cols <- colnames(data_full)
-depth_cols <- grep('depth', all_cols, value=TRUE)
-not_to_plot <- c("sensor_depth")
-ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+ts_cols <- grep('depth', all_cols, value=TRUE)
 print(ts_cols)
 
 # Make plots
@@ -359,14 +348,13 @@ all_offsets <- pivot_history %>%
   select(all_of(all_offset_cols))
 quick_plot_offset2(all_offsets)
 
-
 ## ------- C Revise water depth -----------------------------------------
 
 # - Just use offset version #2 for the entire timeseries
 #   offset V2 agrees better with field checks and other offsets compared to V1
 print(all_offsets)
 # PICK OFFSET HERE
-### !!!!!!! offset V1 !!!!!!!!!!!!!!!!!
+### !!!!!!! offset V2 !!!!!!!!!!!!!!!!!
 # Choose offset "offset_m_2"
 offset_names_to_use <- all_offset_names[all_offset_names == "offset_m_2"]
 offset_dates_to_use <- all_offset_dates[all_offset_dates == "P_G/L_date_2"]
@@ -382,7 +370,7 @@ data_full <- data_full %>%
   mutate(
     offset_version = offset_names_to_use,           
     offset_value   = new_offset,            
-    revised_depth  = sensor_depth - offset_value,
+    well_depth_m  = head_m - offset_value,
     flag           = 0,                      
     notes          = NA_character_          
   )
@@ -390,16 +378,16 @@ data_full <- data_full %>%
 ## ------- D Plot the data with a revised offset -----------------------
 
 # Run the anomaly remover
-data_full <- anomaly_remover(data_full, 'revised_depth')
+data_full <- anomaly_remover(data_full, 'well_depth_m')
 
 make_site_ts(site_ts=data_full,
-             y_vars=c("original_depth", "revised_depth"),
+             y_vars=c("original_depth_m", "well_depth_m"),
              qaqc)
 
 # Note the bottoming out depth flag = 2
 data_full <- data_full %>% 
   mutate(flag = if_else(
-    revised_depth <= -0.7,
+    well_depth_m <= -0.69,
     2,
     flag
   )
@@ -408,8 +396,8 @@ data_full <- data_full %>%
 data_out <- data_full %>% 
   select(
     c(
-      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
-      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+      'well_id', 'timestamp', 'head_m', 'original_depth_m', 
+      'depth_avg', 'well_depth_m', 'offset_version', 'offset_value', 'flag', 'notes'
     )
   )
 
@@ -426,7 +414,7 @@ output_data <- bind_rows(output_data, data_out)
 
 # Add checks to output
 checks_final <- checks_final %>%
-  mutate("Site_ID" = site) %>% 
+  mutate("well_id" = site) %>% 
   rename(field_check_m = chk_m,
          logger_val_m = logger_date_mean_trimmed)
 output_checks <- bind_rows(output_checks, checks_final)
@@ -435,8 +423,8 @@ rm(site, data, qaqc, pivot_history,
    status, data_full, data_out, checks_final) 
 rm(offsets_to_use, new_offset, offset_cols_to_use, 
    offset_dates_to_use, offset_names_to_use, offset_vals_use)
-rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
-   all_offset_names, all_offsets, checks, depth_cols)
+rm(ts_cols, all_cols, all_offset_cols, all_offset_dates,
+   all_offset_names, all_offsets, checks)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # IV) Site: 13_274 -------------------------------------------------------
@@ -454,10 +442,7 @@ print(status$Notes)
 data_full <- calc_stages_from_offsets(data, pivot_history)
 # Select columns to plot
 all_cols <- colnames(data_full)
-depth_cols <- grep('depth', all_cols, value=TRUE)
-
-not_to_plot <- c("sensor_depth")
-ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+ts_cols <- grep('depth', all_cols, value=TRUE)
 print(ts_cols)
 
 # Make plots
@@ -474,7 +459,6 @@ all_offset_cols <- c(all_offset_dates, all_offset_names)
 all_offsets <- pivot_history %>% 
   select(all_of(all_offset_cols))
 quick_plot_offset2(all_offsets)
-
 
 ## ------- C Revise water depth -----------------------------------------
 
@@ -498,22 +482,22 @@ data_full <- data_full %>%
   mutate(
     offset_version = offset_names_to_use,           
     offset_value   = new_offset,            
-    revised_depth  = sensor_depth - offset_value,
+    well_depth_m  = head_m - offset_value,
     flag           = 0,                      
     notes          = NA_character_          
   )
 
 ## ------- D Plot the data with a revised offset -----------------------
 # Run the anomaly remover
-data_full <- anomaly_remover(data_full, 'revised_depth')
+data_full <- anomaly_remover(data_full, 'well_depth_m')
 make_site_ts(site_ts=data_full,
-             y_vars=c("original_depth", "revised_depth"),
+             y_vars=c("original_depth_m", "well_depth_m"),
              qaqc)
 
 # Note the bottoming out depth flag = 2
 data_full <- data_full %>% 
   mutate(flag = if_else(
-    revised_depth <= -0.86,
+    well_depth_m <= -0.84,
     2,
     flag
   )
@@ -522,8 +506,8 @@ data_full <- data_full %>%
 data_out <- data_full %>% 
   select(
     c(
-      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
-      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+      'well_id', 'timestamp', 'head_m', 'original_depth_m', 
+      'depth_avg', 'well_depth_m', 'offset_version', 'offset_value', 'flag', 'notes'
     )
   )
 
@@ -540,7 +524,7 @@ output_data <- bind_rows(output_data, data_out)
 
 # Add checks to output
 checks_final <- checks_final %>%
-  mutate("Site_ID" = site) %>% 
+  mutate("well_id" = site) %>% 
   rename(field_check_m = chk_m,
          logger_val_m = logger_date_mean_trimmed)
 output_checks <- bind_rows(output_checks, checks_final)
@@ -549,8 +533,8 @@ rm(site, data, qaqc, pivot_history,
    status, data_full, data_out, checks_final) 
 rm(offsets_to_use, new_offset, offset_cols_to_use, 
    offset_dates_to_use, offset_names_to_use, offset_vals_use)
-rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
-   all_offset_names, all_offsets, checks, depth_cols)
+rm(ts_cols, all_cols, all_offset_cols, all_offset_dates,
+   all_offset_names, all_offsets, checks)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # V) Site: 13_410 -------------------------------------------------------
@@ -568,15 +552,14 @@ print(status$Notes)
 data_full <- calc_stages_from_offsets(data, pivot_history)
 # Select columns to plot
 all_cols <- colnames(data_full)
-depth_cols <- grep('depth', all_cols, value=TRUE)
-not_to_plot <- c("sensor_depth")
-ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+ts_cols <- grep('depth', all_cols, value=TRUE)
 print(ts_cols)
 
 # Make plots
 make_site_ts(site_ts=data_full, 
              y_vars = ts_cols, 
              qaqc_df = qaqc)
+
 # Plot checks
 checks <- make_checks_df(data_full, qaqc)
 plot_checks(checks, site)
@@ -587,7 +570,6 @@ all_offset_cols <- c(all_offset_dates, all_offset_names)
 all_offsets <- pivot_history %>% 
   select(all_of(all_offset_cols))
 quick_plot_offset2(all_offsets)
-
 
 ## ------- C Revise water depth -----------------------------------------
 
@@ -610,35 +592,34 @@ data_full <- data_full %>%
   mutate(
     offset_version = offset_names_to_use,           
     offset_value   = new_offset,            
-    revised_depth  = sensor_depth - offset_value,
+    well_depth_m  = head_m - offset_value,
     flag           = 0,                      
     notes          = NA_character_           
   )
 
 ## ------- D Plot the data with a revised offset -----------------------
 # Run the anomaly remover
-data_full <- anomaly_remover(data_full, 'revised_depth')
+data_full <- anomaly_remover(data_full, 'well_depth_m')
 
 make_site_ts(site_ts=data_full,
-             y_vars=c("original_depth", "revised_depth"),
+             y_vars=c("original_depth_m", "well_depth_m"),
              qaqc)
 
 # Note the bottoming out depth flag=2
 data_full <- data_full %>% 
   mutate(
     flag = if_else(
-      revised_depth <= -0.66,
+      well_depth_m <= -0.635,
       2,
       flag
     )
   )
 
-
 data_out <- data_full %>% 
   select(
     c(
-      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
-      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+      'well_id', 'timestamp', 'head_m', 'original_depth_m', 
+      'depth_avg', 'well_depth_m', 'offset_version', 'offset_value', 'flag', 'notes'
     )
   )
 
@@ -654,18 +635,17 @@ output_data <- bind_rows(output_data, data_out)
 
 # Add checks to output
 checks_final <- checks_final %>%
-  mutate("Site_ID" = site) %>% 
+  mutate("well_id" = site) %>% 
   rename(field_check_m = chk_m,
          logger_val_m = logger_date_mean_trimmed)
 output_checks <- bind_rows(output_checks, checks_final)
 
 rm(site, data, qaqc, pivot_history, 
    status, data_full, data_out, checks_final) 
-
 rm(offsets_to_use, new_offset, offset_cols_to_use, 
    offset_dates_to_use, offset_names_to_use, offset_vals_use)
-rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
-   all_offset_names, all_offsets, checks, depth_cols)
+rm(ts_cols, all_cols, all_offset_cols, all_offset_dates,
+   all_offset_names, all_offsets, checks)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # VI) Site: 14/9_168-------------------------------------------------------
@@ -676,16 +656,14 @@ site <- "14/9_168"
 data <- site_ts_from_xlsx_sheet(compiled_path, site)
 qaqc <- fetch_water_checks(meta_data_path, site) 
 pivot_history <- fetch_pivot_history(meta_data_path, site)
-status <- fetch_post_process_status(status_path, site)
+status <- fetch_post_process_status(status_path, "14.9_168")
 print(status$Notes)
 
 ## ------ B Explore depth versions -------------------------
 data_full <- calc_stages_from_offsets(data, pivot_history)
 # Select columns to plot
 all_cols <- colnames(data_full)
-depth_cols <- grep('depth', all_cols, value=TRUE)
-not_to_plot <- c("sensor_depth")
-ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+ts_cols <- grep('depth', all_cols, value=TRUE)
 print(ts_cols)
 
 # Make plots
@@ -724,23 +702,23 @@ data_full <- data_full %>%
   mutate(
     offset_version = offset_names_to_use,           
     offset_value   = new_offset,            
-    revised_depth  = sensor_depth - offset_value,
+    well_depth_m  = head_m - offset_value,
     flag           = 0,                      
     notes          = NA_character_           
   )
 
 ## ------- D Plot the data with a revised offset -----------------------
 # Run the anomaly remover function
-data_full <- anomaly_remover(data_full, 'revised_depth')
+data_full <- anomaly_remover(data_full, 'well_depth_m')
 
 make_site_ts(site_ts=data_full,
-             y_vars=c("revised_depth"),
+             y_vars=c("original_depth_m", "well_depth_m"),
              qaqc)
 
 # Flag = 2 for bottomed out data
 data_full <- data_full %>% 
   mutate(flag = if_else(
-    revised_depth <= -0.65,
+    well_depth_m <= -0.645,
     2,
     flag
   )
@@ -749,8 +727,8 @@ data_full <- data_full %>%
 data_out <- data_full %>% 
   select(
     c(
-      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
-      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+      'well_id', 'timestamp', 'head_m', 'original_depth_m', 
+      'depth_avg', 'well_depth_m', 'offset_version', 'offset_value', 'flag', 'notes'
     )
   )
 
@@ -766,18 +744,17 @@ output_data <- bind_rows(output_data, data_out)
 
 # Add checks to output
 checks_final <- checks_final %>%
-  mutate("Site_ID" = site) %>% 
+  mutate("well_id" = site) %>% 
   rename(field_check_m = chk_m,
          logger_val_m = logger_date_mean_trimmed)
 output_checks <- bind_rows(output_checks, checks_final)
 
 rm(site, data, qaqc, pivot_history, 
    status, data_full, data_out, checks_final) 
-
 rm(offsets_to_use, new_offset, offset_cols_to_use, 
    offset_dates_to_use, offset_names_to_use, offset_vals_use)
-rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
-   all_offset_names, all_offsets, checks, depth_cols)
+rm(ts_cols, all_cols, all_offset_cols, all_offset_dates,
+   all_offset_names, all_offsets, checks)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # VII) Site: 14/9_527-------------------------------------------------------
@@ -789,16 +766,14 @@ site <- "14/9_527"
 data <- site_ts_from_xlsx_sheet(compiled_path, site)
 qaqc <- fetch_water_checks(meta_data_path, site) 
 pivot_history <- fetch_pivot_history(meta_data_path, site)
-status <- fetch_post_process_status(status_path, site)
+status <- fetch_post_process_status(status_path, "14.9_527")
 print(status$Notes)
 
 ## ------ B Explore depth versions -------------------------
 data_full <- calc_stages_from_offsets(data, pivot_history)
 # Select columns to plot
 all_cols <- colnames(data_full)
-depth_cols <- grep('depth', all_cols, value=TRUE)
-not_to_plot <- c("sensor_depth")
-ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+ts_cols <- grep('depth', all_cols, value=TRUE)
 print(ts_cols)
 
 # Make plots
@@ -815,7 +790,6 @@ all_offset_cols <- c(all_offset_dates, all_offset_names)
 all_offsets <- pivot_history %>% 
   select(all_of(all_offset_cols))
 quick_plot_offset2(all_offsets)
-
 
 ## ------- C Revise water depth -----------------------------------------
 
@@ -836,23 +810,23 @@ data_full <- data_full %>%
   mutate(
     offset_version = offset_names_to_use,           
     offset_value   = new_offset,            
-    revised_depth  = sensor_depth - offset_value,
+    well_depth_m  = head_m - offset_value,
     flag           = 0,                      
     notes          = NA_character_           
   )
 
 ## ------- D Plot the data with a revised offset -----------------------
 # Run the anomaly remover
-data_full <- anomaly_remover(data_full, 'revised_depth')
+data_full <- anomaly_remover(data_full, 'well_depth_m')
 
 make_site_ts(site_ts=data_full,
-             y_vars=c("original_depth", "revised_depth"),
+             y_vars=c("original_depth_m", "well_depth_m"),
              qaqc)
 
 # Note the bottomed out data with flag =2
 data_full <- data_full %>% 
   mutate(flag = if_else(
-    revised_depth <= -0.74,
+    well_depth_m <= -0.73,
     2,
     flag
   )
@@ -861,8 +835,8 @@ data_full <- data_full %>%
 data_out <- data_full %>% 
   select(
     c(
-      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
-      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+      'well_id', 'timestamp', 'head_m', 'original_depth_m', 
+      'depth_avg', 'well_depth_m', 'offset_version', 'offset_value', 'flag', 'notes'
     )
   )
 
@@ -878,18 +852,17 @@ output_data <- bind_rows(output_data, data_out)
 
 # Add checks to output
 checks_final <- checks_final %>%
-  mutate("Site_ID" = site) %>% 
+  mutate("well_id" = site) %>% 
   rename(field_check_m = chk_m,
          logger_val_m = logger_date_mean_trimmed)
 output_checks <- bind_rows(output_checks, checks_final)
 
 rm(site, data, qaqc, pivot_history, 
    status, data_full, data_out, checks_final) 
-
 rm(offsets_to_use, new_offset, offset_cols_to_use, 
    offset_dates_to_use, offset_names_to_use, offset_vals_use)
-rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
-   all_offset_names, all_offsets, checks, depth_cols)
+rm(ts_cols, all_cols, all_offset_cols, all_offset_dates,
+   all_offset_names, all_offsets, checks)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # VIII) Site: 14/9_601-------------------------------------------------------
@@ -900,22 +873,21 @@ site <- "14/9_601"
 data <- site_ts_from_xlsx_sheet(compiled_path, site)
 qaqc <- fetch_water_checks(meta_data_path, site) 
 pivot_history <- fetch_pivot_history(meta_data_path, site)
-status <- fetch_post_process_status(status_path, site)
+status <- fetch_post_process_status(status_path, "14.9_601")
 print(status$Notes)
 
 ## ------ B Explore depth versions -------------------------
 data_full <- calc_stages_from_offsets(data, pivot_history)
 # Select columns to plot
 all_cols <- colnames(data_full)
-depth_cols <- grep('depth', all_cols, value=TRUE)
-not_to_plot <- c("sensor_depth")
-ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+ts_cols <- grep('depth', all_cols, value=TRUE)
 print(ts_cols)
 
 # Make plots
 make_site_ts(site_ts=data_full, 
              y_vars = ts_cols, 
              qaqc_df = qaqc)
+ 
 # Plot checks
 checks <- make_checks_df(data_full, qaqc)
 plot_checks(checks, site)
@@ -946,7 +918,7 @@ data_full <- data_full %>%
   mutate(
     offset_version = offset_names_to_use,           
     offset_value   = new_offset,            
-    revised_depth  = sensor_depth - offset_value,
+    well_depth_m  = head_m - offset_value,
     flag           = 0,                      
     notes          = NA_character_           
   )
@@ -954,10 +926,10 @@ data_full <- data_full %>%
 ## ------- D Plot the data with a revised offset -----------------------
 
 # Run the anomaly remover
-data_full <- anomaly_remover(data_full, 'revised_depth')
+data_full <- anomaly_remover(data_full, 'well_depth_m')
 
 make_site_ts(site_ts=data_full,
-             y_vars=c("original_depth", "revised_depth"),
+             y_vars=c("original_depth_m", "well_depth_m"),
              qaqc)
 
 # NOTE: Well does not bottom out, bottoming out depth TBD
@@ -965,8 +937,8 @@ make_site_ts(site_ts=data_full,
 data_out <- data_full %>% 
   select(
     c(
-      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
-      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+      'well_id', 'timestamp', 'head_m', 'original_depth_m', 
+      'depth_avg', 'well_depth_m', 'offset_version', 'offset_value', 'flag', 'notes'
     )
   )
 
@@ -982,18 +954,17 @@ output_data <- bind_rows(output_data, data_out)
 
 # Add checks to output
 checks_final <- checks_final %>%
-  mutate("Site_ID" = site) %>% 
+  mutate("well_id" = site) %>% 
   rename(field_check_m = chk_m,
          logger_val_m = logger_date_mean_trimmed)
 output_checks <- bind_rows(output_checks, checks_final)
 
 rm(site, data, qaqc, pivot_history, 
    status, data_full, data_out, checks_final) 
-
 rm(offsets_to_use, new_offset, offset_cols_to_use, 
    offset_dates_to_use, offset_names_to_use, offset_vals_use)
-rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
-   all_offset_names, all_offsets, checks, depth_cols)
+rm(ts_cols, all_cols, all_offset_cols, all_offset_dates,
+   all_offset_names, all_offsets, checks)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # IX) Site: 14_115-------------------------------------------------------
@@ -1011,9 +982,7 @@ print(status$Notes)
 data_full <- calc_stages_from_offsets(data, pivot_history)
 # Select columns to plot
 all_cols <- colnames(data_full)
-depth_cols <- grep('depth', all_cols, value=TRUE)
-not_to_plot <- c("sensor_depth")
-ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+ts_cols <- grep('depth', all_cols, value=TRUE)
 print(ts_cols)
 
 # Make plots
@@ -1050,7 +1019,7 @@ data_full <- data_full %>%
   mutate(
     offset_version = offset_names_to_use,           
     offset_value   = new_offset,            
-    revised_depth  = sensor_depth - offset_value,
+    well_depth_m  = head_m - offset_value,
     flag           = 0,                      
     notes          = NA_character_        
   )
@@ -1058,16 +1027,16 @@ data_full <- data_full %>%
 ## ------- D Plot the data with a revised offset -----------------------
 
 # Anomaly remover 
-data_full <- anomaly_remover(data_full, 'revised_depth')
+data_full <- anomaly_remover(data_full, 'well_depth_m')
 
 make_site_ts(site_ts=data_full,
-             y_vars=c("original_depth", "revised_depth"),
+             y_vars=c("original_depth_m", "well_depth_m"),
              qaqc)
 
 # Flag = 2 for bottomed out data
 data_full <- data_full %>% 
   mutate(flag = if_else(
-    revised_depth <= -0.40,
+    well_depth_m <= -0.40,
     2, 
     flag
   )
@@ -1076,8 +1045,8 @@ data_full <- data_full %>%
 data_out <- data_full %>% 
   select(
     c(
-      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
-      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+      'well_id', 'timestamp', 'head_m', 'original_depth_m', 
+      'depth_avg', 'well_depth_m', 'offset_version', 'offset_value', 'flag', 'notes'
     )
   )
 
@@ -1093,18 +1062,17 @@ output_data <- bind_rows(output_data, data_out)
 
 # Add checks to output
 checks_final <- checks_final %>%
-  mutate("Site_ID" = site) %>% 
+  mutate("well_id" = site) %>% 
   rename(field_check_m = chk_m,
          logger_val_m = logger_date_mean_trimmed)
 output_checks <- bind_rows(output_checks, checks_final)
 
 rm(site, data, qaqc, pivot_history, 
    status, data_full, data_out, checks_final) 
-
 rm(offsets_to_use, new_offset, offset_cols_to_use, 
    offset_dates_to_use, offset_names_to_use, offset_vals_use)
-rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
-   all_offset_names, all_offsets, checks, depth_cols)
+rm(ts_cols, all_cols, all_offset_cols, all_offset_dates,
+   all_offset_names, all_offsets, checks)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # X) Site: 14_15-------------------------------------------------------
@@ -1122,9 +1090,7 @@ print(status$Notes)
 data_full <- calc_stages_from_offsets(data, pivot_history)
 # Select columns to plot
 all_cols <- colnames(data_full)
-depth_cols <- grep('depth', all_cols, value=TRUE)
-not_to_plot <- c("sensor_depth")
-ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+ts_cols <- grep('depth', all_cols, value=TRUE)
 print(ts_cols)
 
 # Make plots
@@ -1161,7 +1127,7 @@ data_full <- data_full %>%
   mutate(
     offset_version = offset_names_to_use,           
     offset_value   = new_offset,            
-    revised_depth  = sensor_depth - offset_value,
+    well_depth_m  = head_m - offset_value,
     flag           = 0,                      
     notes          = NA_character_         
   )
@@ -1169,16 +1135,16 @@ data_full <- data_full %>%
 ## ------- D Plot the data with a revised offset -----------------------
 
 # Run the anomaly remover
-data_full <- anomaly_remover(data_full, 'revised_depth')
+data_full <- anomaly_remover(data_full, 'well_depth_m')
 
 make_site_ts(site_ts=data_full,
-             y_vars=c("original_depth", "revised_depth"),
+             y_vars=c("original_depth_m", "well_depth_m"),
              qaqc)
 
 # Bottomed out data with flag = 2
 data_full <- data_full %>% 
   mutate(flag = if_else(
-    revised_depth <= -0.355,
+    well_depth_m <= -0.34,
     2,
     flag
   )
@@ -1187,8 +1153,8 @@ data_full <- data_full %>%
 data_out <- data_full %>% 
   select(
     c(
-      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
-      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+      'well_id', 'timestamp', 'head_m', 'original_depth_m', 
+      'depth_avg', 'well_depth_m', 'offset_version', 'offset_value', 'flag', 'notes'
     )
   )
 
@@ -1204,18 +1170,17 @@ output_data <- bind_rows(output_data, data_out)
 
 # Add checks to output
 checks_final <- checks_final %>%
-  mutate("Site_ID" = site) %>% 
+  mutate("well_id" = site) %>% 
   rename(field_check_m = chk_m,
          logger_val_m = logger_date_mean_trimmed)
 output_checks <- bind_rows(output_checks, checks_final)
 
 rm(site, data, qaqc, pivot_history, 
    status, data_full, data_out, checks_final) 
-
 rm(offsets_to_use, new_offset, offset_cols_to_use, 
    offset_dates_to_use, offset_names_to_use, offset_vals_use)
-rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
-   all_offset_names, all_offsets, checks, depth_cols)
+rm(ts_cols, all_cols, all_offset_cols, all_offset_dates,
+   all_offset_names, all_offsets, checks)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # XI) Site: 14_418-------------------------------------------------------
@@ -1233,9 +1198,7 @@ print(status$Notes)
 data_full <- calc_stages_from_offsets(data, pivot_history)
 # Select columns to plot
 all_cols <- colnames(data_full)
-depth_cols <- grep('depth', all_cols, value=TRUE)
-not_to_plot <- c("sensor_depth")
-ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+ts_cols <- grep('depth', all_cols, value=TRUE)
 print(ts_cols)
 
 # Make plots
@@ -1273,7 +1236,7 @@ data_full <- data_full %>%
   mutate(
     offset_version = offset_names_to_use,           
     offset_value   = new_offset,            
-    revised_depth  = sensor_depth - offset_value,
+    well_depth_m  = head_m - offset_value,
     flag           = 0,                      
     notes          = NA_character_       
   )
@@ -1281,16 +1244,16 @@ data_full <- data_full %>%
 ## ------- D Plot the data with a revised offset -----------------------
 
 # anomaly remover 
-data_full <- anomaly_remover(data_full, 'revised_depth')
+data_full <- anomaly_remover(data_full, 'well_depth_m')
 
 make_site_ts(site_ts=data_full,
-             y_vars=c("original_depth", "revised_depth"),
+             y_vars=c("original_depth_m", "well_depth_m"),
              qaqc)
 
 # Flag = 2 for bottomed out data
 data_full <- data_full %>% 
   mutate(flag = if_else(
-    revised_depth <= -0.755,
+    well_depth_m <= -0.73,
     2,
     flag
   )
@@ -1299,8 +1262,8 @@ data_full <- data_full %>%
 data_out <- data_full %>% 
   select(
     c(
-      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
-      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+      'well_id', 'timestamp', 'head_m', 'original_depth_m', 
+      'depth_avg', 'well_depth_m', 'offset_version', 'offset_value', 'flag', 'notes'
     )
   )
 
@@ -1316,18 +1279,17 @@ output_data <- bind_rows(output_data, data_out)
 
 # Add checks to output
 checks_final <- checks_final %>%
-  mutate("Site_ID" = site) %>% 
+  mutate("well_id" = site) %>% 
   rename(field_check_m = chk_m,
          logger_val_m = logger_date_mean_trimmed)
 output_checks <- bind_rows(output_checks, checks_final)
 
 rm(site, data, qaqc, pivot_history, 
    status, data_full, data_out, checks_final) 
-
 rm(offsets_to_use, new_offset, offset_cols_to_use, 
    offset_dates_to_use, offset_names_to_use, offset_vals_use)
-rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
-   all_offset_names, all_offsets, checks, depth_cols)
+rm(ts_cols, all_cols, all_offset_cols, all_offset_dates,
+   all_offset_names, all_offsets, checks)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # XII) Site: 14_500-------------------------------------------------------
@@ -1345,9 +1307,7 @@ print(status$Notes)
 data_full <- calc_stages_from_offsets(data, pivot_history)
 # Select columns to plot
 all_cols <- colnames(data_full)
-depth_cols <- grep('depth', all_cols, value=TRUE)
-not_to_plot <- c("sensor_depth")
-ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+ts_cols <- grep('depth', all_cols, value=TRUE)
 print(ts_cols)
 
 # Make plots
@@ -1384,7 +1344,7 @@ data_full <- data_full %>%
   mutate(
     offset_version = offset_names_to_use,           
     offset_value   = new_offset,            
-    revised_depth  = sensor_depth - offset_value,
+    well_depth_m  = head_m - offset_value,
     flag           = 0,                      
     notes          = NA_character_   
   )
@@ -1392,15 +1352,15 @@ data_full <- data_full %>%
 ## ------- D Plot the data with a revised offset -----------------------
 
 # Anomaly remover
-data_full <- anomaly_remover(data_full, 'revised_depth')
+data_full <- anomaly_remover(data_full, 'well_depth_m')
 make_site_ts(site_ts=data_full,
-             y_vars=c("original_depth", "revised_depth"),
+             y_vars=c("original_depth_m", "well_depth_m"),
              qaqc)
 
 # Note the bottoming out depth with flag = 2
 data_full <- data_full %>% 
   mutate(flag = if_else(
-    revised_depth <= -0.525,
+    well_depth_m <= -0.49,
     2,
     flag
   )
@@ -1409,8 +1369,8 @@ data_full <- data_full %>%
 data_out <- data_full %>% 
   select(
     c(
-      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
-      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+      'well_id', 'timestamp', 'head_m', 'original_depth_m', 
+      'depth_avg', 'well_depth_m', 'offset_version', 'offset_value', 'flag', 'notes'
     )
   )
 
@@ -1426,18 +1386,17 @@ output_data <- bind_rows(output_data, data_out)
 
 # Add checks to output
 checks_final <- checks_final %>%
-  mutate("Site_ID" = site) %>% 
+  mutate("well_id" = site) %>% 
   rename(field_check_m = chk_m,
          logger_val_m = logger_date_mean_trimmed)
 output_checks <- bind_rows(output_checks, checks_final)
 
 rm(site, data, qaqc, pivot_history, 
    status, data_full, data_out, checks_final) 
-
 rm(offsets_to_use, new_offset, offset_cols_to_use, 
    offset_dates_to_use, offset_names_to_use, offset_vals_use)
-rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
-   all_offset_names, all_offsets, checks, depth_cols)
+rm(ts_cols, all_cols, all_offset_cols, all_offset_dates,
+   all_offset_names, all_offsets, checks)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # XIII) Site: 14_538-------------------------------------------------------
@@ -1455,9 +1414,7 @@ print(status$Notes)
 data_full <- calc_stages_from_offsets(data, pivot_history)
 # Select columns to plot
 all_cols <- colnames(data_full)
-depth_cols <- grep('depth', all_cols, value=TRUE)
-not_to_plot <- c("sensor_depth", "original_depth")
-ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+ts_cols <- grep('depth', all_cols, value=TRUE)
 print(ts_cols)
 
 # Make plots
@@ -1494,7 +1451,7 @@ data_full <- data_full %>%
   mutate(
     offset_version = offset_names_to_use,           
     offset_value   = new_offset,            
-    revised_depth  = sensor_depth - offset_value,
+    well_depth_m  = head_m - offset_value,
     flag           = 0,                      
     notes          = NA_character_    
   )
@@ -1502,10 +1459,10 @@ data_full <- data_full %>%
 ## ------- D Plot the data with a revised offset -----------------------
 
 # Run the anomaly remover
-data_full <- anomaly_remover(data_full, 'revised_depth')
+data_full <- anomaly_remover(data_full, 'well_depth_m')
 
 make_site_ts(site_ts=data_full,
-             y_vars=c("original_depth", "revised_depth"),
+             y_vars=c("original_depth_m", "well_depth_m"),
              qaqc)
 
 # NOTE: No apparent bottomed out data for this well bottom-out depth TBD
@@ -1513,8 +1470,8 @@ make_site_ts(site_ts=data_full,
 data_out <- data_full %>% 
   select(
     c(
-      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
-      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+      'well_id', 'timestamp', 'head_m', 'original_depth_m', 
+      'depth_avg', 'well_depth_m', 'offset_version', 'offset_value', 'flag', 'notes'
     )
   )
 
@@ -1530,18 +1487,17 @@ output_data <- bind_rows(output_data, data_out)
 
 # Add checks to output
 checks_final <- checks_final %>%
-  mutate("Site_ID" = site) %>% 
+  mutate("well_id" = site) %>% 
   rename(field_check_m = chk_m,
          logger_val_m = logger_date_mean_trimmed)
 output_checks <- bind_rows(output_checks, checks_final)
 
 rm(site, data, qaqc, pivot_history, 
    status, data_full, data_out, checks_final) 
-
 rm(offsets_to_use, new_offset, offset_cols_to_use, 
    offset_dates_to_use, offset_names_to_use, offset_vals_use)
-rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
-   all_offset_names, all_offsets, checks, depth_cols)
+rm(ts_cols, all_cols, all_offset_cols, all_offset_dates,
+   all_offset_names, all_offsets, checks)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # XIV) Site: 14_610-------------------------------------------------------
@@ -1559,14 +1515,12 @@ print(status$Notes)
 data_full <- calc_stages_from_offsets(data, pivot_history)
 # Select columns to plot
 all_cols <- colnames(data_full)
-depth_cols <- grep('depth', all_cols, value=TRUE)
-not_to_plot <- c("sensor_depth")
-ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+ts_cols <- grep('depth', all_cols, value=TRUE)
 print(ts_cols)
 
 # Make plots
 make_site_ts(site_ts=data_full, 
-             y_vars = ts_cols, 
+             y_vars = c(ts_cols, "head_m"), 
              qaqc_df = qaqc)
 # Plot checks
 checks <- make_checks_df(data_full, qaqc)
@@ -1594,46 +1548,45 @@ offset_vals_use1 <- offsets_to_use1 %>% select(all_of(offset_names_to_use1))
 ### !!!!!!! offset V2 !!!!!!!!!!!!!!!!!
 new_offset1 <- offset_vals_use1 %>%  unlist() %>% mean(na.rm = TRUE)
 
-
 data_full <- data_full %>% 
   # Apply offset #1 prior to October 18th 2022 and after June 5th 2023
   # Delete data between October 18th 2022 and after June 5th 2023
   mutate(
     offset_version = case_when(
-      Date <  as.Date("2022-10-18") ~ offset_names_to_use1,
-      Date >  as.Date("2023-06-06") ~ offset_names_to_use1,
+      timestamp <  as.POSIXct("2022-10-18") ~ offset_names_to_use1,
+      timestamp >  as.POSIXct("2023-06-06") ~ offset_names_to_use1,
       TRUE                          ~ NA_character_
     ),
     offset_value = case_when(
-      Date <  as.Date("2022-10-18") ~ new_offset1,
-      Date >  as.Date("2023-06-06") ~ new_offset1,
+      timestamp <  as.POSIXct("2022-10-18") ~ new_offset1,
+      timestamp >  as.POSIXct("2023-06-06") ~ new_offset1,
       TRUE                          ~ NA_real_
     ),
     flag = case_when(
-      Date <  as.Date("2022-10-18") ~ 0,
-      Date >  as.Date("2023-06-06") ~ 0,
+      timestamp <  as.POSIXct("2022-10-18") ~ 0,
+      timestamp >  as.POSIXct("2023-06-06") ~ 0,
       TRUE                          ~ 5
     ),
     notes = case_when(
-      Date <  as.Date("2022-10-18") ~ NA_character_,
-      Date >  as.Date("2023-06-06") ~ NA_character_,
+      timestamp <  as.POSIXct("2022-10-18") ~ NA_character_,
+      timestamp >  as.POSIXct("2023-06-06") ~ NA_character_,
       TRUE                          ~ "Equipment malfunction! Data deleted"
     ),
-    revised_depth = sensor_depth - offset_value
+    well_depth_m = head_m - offset_value
   ) 
 
 ## ------- D Plot the data with a revised offset -----------------------
 # Run the anomaly remover 
-data_full <- anomaly_remover(data_full, 'revised_depth')
+data_full <- anomaly_remover(data_full, 'well_depth_m')
 
 make_site_ts(site_ts=data_full,
-             y_vars=c("original_depth", "revised_depth"),
+             y_vars=c("original_depth_m", "well_depth_m"),
              qaqc)
 
 # Note the bottoming out depth with flag =2
 data_full <- data_full %>% 
   mutate(flag = if_else(
-    revised_depth <= -0.575,
+    well_depth_m <= -0.535,
     2,
     flag
   )
@@ -1642,8 +1595,8 @@ data_full <- data_full %>%
 data_out <- data_full %>% 
   select(
     c(
-      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
-      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+      'well_id', 'timestamp', 'head_m', 'original_depth_m', 
+      'depth_avg', 'well_depth_m', 'offset_version', 'offset_value', 'flag', 'notes'
     )
   )
 
@@ -1659,18 +1612,17 @@ output_data <- bind_rows(output_data, data_out)
 
 # Add checks to output
 checks_final <- checks_final %>%
-  mutate("Site_ID" = site) %>% 
+  mutate("well_id" = site) %>% 
   rename(field_check_m = chk_m,
          logger_val_m = logger_date_mean_trimmed)
 output_checks <- bind_rows(output_checks, checks_final)
 
 rm(site, data, qaqc, pivot_history, 
    status, data_full, data_out, checks_final) 
-
 rm(offsets_to_use1, new_offset1, offset_cols_to_use1, 
    offset_dates_to_use1, offset_names_to_use1, offset_vals_use1)
-rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
-   all_offset_names, all_offsets, checks, depth_cols)
+rm(ts_cols, all_cols, all_offset_cols, all_offset_dates,
+   all_offset_names, all_offsets, checks)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # XV) Site: 14_612-------------------------------------------------------
@@ -1688,9 +1640,7 @@ print(status$Notes)
 data_full <- calc_stages_from_offsets(data, pivot_history)
 # Select columns to plot
 all_cols <- colnames(data_full)
-depth_cols <- grep('depth', all_cols, value=TRUE)
-not_to_plot <- c("sensor_depth")
-ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+ts_cols <- grep('depth', all_cols, value=TRUE)
 print(ts_cols)
 
 # Make plots
@@ -1727,7 +1677,7 @@ data_full <- data_full %>%
   mutate(
     offset_version = offset_names_to_use,           
     offset_value   = new_offset,            
-    revised_depth  = sensor_depth - offset_value,
+    well_depth_m  = head_m - offset_value,
     flag           = 0,                      
     notes          = NA_character_    
   )
@@ -1735,27 +1685,26 @@ data_full <- data_full %>%
 ## ------- D Plot the data with a revised offset -----------------------
 
 # Run the anomaly remover
-data_full <- anomaly_remover(data_full, 'revised_depth')
+data_full <- anomaly_remover(data_full, 'well_depth_m')
 
 make_site_ts(site_ts=data_full,
-             y_vars=c("original_depth", "revised_depth"),
+             y_vars=c("original_depth_m", "well_depth_m"),
              qaqc)
 
 # flag = 2 for bottoming out depth
 data_full <- data_full %>% 
   mutate(flag = if_else(
-    revised_depth <= -0.71,
+    well_depth_m <= -0.705,
     2,
     flag
   )
 )
-# Note the bottoming out depth
 
 data_out <- data_full %>% 
   select(
     c(
-      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
-      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+      'well_id', 'timestamp', 'head_m', 'original_depth_m', 
+      'depth_avg', 'well_depth_m', 'offset_version', 'offset_value', 'flag', 'notes'
     )
   )
 
@@ -1771,18 +1720,17 @@ output_data <- bind_rows(output_data, data_out)
 
 # Add checks to output
 checks_final <- checks_final %>%
-  mutate("Site_ID" = site) %>% 
+  mutate("well_id" = site) %>% 
   rename(field_check_m = chk_m,
          logger_val_m = logger_date_mean_trimmed)
 output_checks <- bind_rows(output_checks, checks_final)
 
 rm(site, data, qaqc, pivot_history, 
    status, data_full, data_out, checks_final) 
-
 rm(offsets_to_use, new_offset, offset_cols_to_use, 
    offset_dates_to_use, offset_names_to_use, offset_vals_use)
-rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
-   all_offset_names, all_offsets, checks, depth_cols)
+rm(ts_cols, all_cols, all_offset_cols, all_offset_dates,
+   all_offset_names, all_offsets, checks)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # XVI) Site: 14_616-------------------------------------------------------
@@ -1800,9 +1748,7 @@ print(status$Notes)
 data_full <- calc_stages_from_offsets(data, pivot_history)
 # Select columns to plot
 all_cols <- colnames(data_full)
-depth_cols <- grep('depth', all_cols, value=TRUE)
-not_to_plot <- c("sensor_depth")
-ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+ts_cols <- grep('depth', all_cols, value=TRUE)
 print(ts_cols)
 
 # Make plots
@@ -1819,7 +1765,6 @@ all_offset_cols <- c(all_offset_dates, all_offset_names)
 all_offsets <- pivot_history %>% 
   select(all_of(all_offset_cols))
 quick_plot_offset2(all_offsets)
-
 
 ## ------- C Revise water depth -----------------------------------------
 
@@ -1840,23 +1785,23 @@ data_full <- data_full %>%
   mutate(
     offset_version = offset_names_to_use,           
     offset_value   = new_offset,            
-    revised_depth  = sensor_depth - offset_value,
+    well_depth_m  = head_m - offset_value,
     flag           = 0,                      
     notes          = NA_character_    
   )
 
 ## ------- D Plot the data with a revised offset -----------------------
 # Run the anomaly remover
-data_full <- anomaly_remover(data_full, 'revised_depth')
+data_full <- anomaly_remover(data_full, 'well_depth_m')
 
 make_site_ts(site_ts=data_full,
-             y_vars=c("original_depth", "revised_depth"),
+             y_vars=c("original_depth_m", "well_depth_m"),
              qaqc)
 
 # Note bottomed out data with flag = 2
 data_full <- data_full %>% 
   mutate(flag = if_else(
-    revised_depth <= -0.80,
+    well_depth_m <= -0.78,
     2,
     flag
   )
@@ -1865,8 +1810,8 @@ data_full <- data_full %>%
 data_out <- data_full %>% 
   select(
     c(
-      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
-      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+      'well_id', 'timestamp', 'head_m', 'original_depth_m', 
+      'depth_avg', 'well_depth_m', 'offset_version', 'offset_value', 'flag', 'notes'
     )
   )
 
@@ -1882,18 +1827,17 @@ output_data <- bind_rows(output_data, data_out)
 
 # Add checks to output
 checks_final <- checks_final %>%
-  mutate("Site_ID" = site) %>% 
+  mutate("well_id" = site) %>% 
   rename(field_check_m = chk_m,
          logger_val_m = logger_date_mean_trimmed)
 output_checks <- bind_rows(output_checks, checks_final)
 
 rm(site, data, qaqc, pivot_history, 
    status, data_full, data_out, checks_final) 
-
 rm(offsets_to_use, new_offset, offset_cols_to_use, 
    offset_dates_to_use, offset_names_to_use, offset_vals_use)
-rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
-   all_offset_names, all_offsets, checks, depth_cols)
+rm(ts_cols, all_cols, all_offset_cols, all_offset_dates,
+   all_offset_names, all_offsets, checks)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # XVIII) Site: 15_268-------------------------------------------------------
@@ -1911,9 +1855,7 @@ print(status$Notes)
 data_full <- calc_stages_from_offsets(data, pivot_history)
 # Select columns to plot
 all_cols <- colnames(data_full)
-depth_cols <- grep('depth', all_cols, value=TRUE)
-not_to_plot <- c("sensor_depth")
-ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+ts_cols <- grep('depth', all_cols, value=TRUE)
 print(ts_cols)
 
 # Make plots
@@ -1930,7 +1872,6 @@ all_offset_cols <- c(all_offset_dates, all_offset_names)
 all_offsets <- pivot_history %>% 
   select(all_of(all_offset_cols))
 quick_plot_offset2(all_offsets)
-
 
 ## ------- C Revise water depth -----------------------------------------
 
@@ -1951,23 +1892,23 @@ data_full <- data_full %>%
   mutate(
     offset_version = offset_names_to_use,           
     offset_value   = new_offset,            
-    revised_depth  = sensor_depth - offset_value,
+    well_depth_m  = head_m - offset_value,
     flag           = 0,                      
     notes          = NA_character_  
   )
 
 ## ------- D Plot the data with a revised offset -----------------------
 # Run the anomaly remover
-data_full <- anomaly_remover(data_full, 'revised_depth')
+data_full <- anomaly_remover(data_full, 'well_depth_m')
 
 make_site_ts(site_ts=data_full,
-             y_vars=c("original_depth", "revised_depth"),
+             y_vars=c("original_depth_m", "well_depth_m"),
              qaqc)
 
 # Flag = 2 for bottomed out data
 data_full <- data_full %>% 
   mutate(flag = if_else(
-    revised_depth <= -0.59, 
+    well_depth_m <= -0.58, 
     2,
     flag
   )
@@ -1976,8 +1917,8 @@ data_full <- data_full %>%
 data_out <- data_full %>% 
   select(
     c(
-      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
-      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+      'well_id', 'timestamp', 'head_m', 'original_depth_m', 
+      'depth_avg', 'well_depth_m', 'offset_version', 'offset_value', 'flag', 'notes'
     )
   )
 
@@ -1993,18 +1934,17 @@ output_data <- bind_rows(output_data, data_out)
 
 # Add checks to output
 checks_final <- checks_final %>%
-  mutate("Site_ID" = site) %>% 
+  mutate("well_id" = site) %>% 
   rename(field_check_m = chk_m,
          logger_val_m = logger_date_mean_trimmed)
 output_checks <- bind_rows(output_checks, checks_final)
 
 rm(site, data, qaqc, pivot_history, 
    status, data_full, data_out, checks_final) 
-
 rm(offsets_to_use, new_offset, offset_cols_to_use, 
    offset_dates_to_use, offset_names_to_use, offset_vals_use)
-rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
-   all_offset_names, all_offsets, checks, depth_cols)
+rm(ts_cols, all_cols, all_offset_cols, all_offset_dates,
+   all_offset_names, all_offsets, checks)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # XIX) Site: 15_4-------------------------------------------------------
@@ -2022,9 +1962,7 @@ print(status$Notes)
 data_full <- calc_stages_from_offsets(data, pivot_history)
 # Select columns to plot
 all_cols <- colnames(data_full)
-depth_cols <- grep('depth', all_cols, value=TRUE)
-not_to_plot <- c("sensor_depth")
-ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+ts_cols <- grep('depth', all_cols, value=TRUE)
 print(ts_cols)
 
 # Make plots
@@ -2041,7 +1979,6 @@ all_offset_cols <- c(all_offset_dates, all_offset_names)
 all_offsets <- pivot_history %>% 
   select(all_of(all_offset_cols))
 quick_plot_offset2(all_offsets)
-
 
 ## ------- C Revise water depth -----------------------------------------
 
@@ -2062,24 +1999,23 @@ data_full <- data_full %>%
   mutate(
     offset_version = offset_names_to_use,           
     offset_value   = new_offset,            
-    revised_depth  = sensor_depth - offset_value,
+    well_depth_m  = head_m - offset_value,
     flag           = 0,                      
     notes          = NA_character_  
 )
     
-
 ## ------- D Plot the data with a revised offset -----------------------
 # Run the anomaly remover
-data_full <- anomaly_remover(data_full, 'revised_depth')
+data_full <- anomaly_remover(data_full, 'well_depth_m')
 
 make_site_ts(site_ts=data_full,
-             y_vars=c("original_depth", "revised_depth"),
+             y_vars=c("original_depth_m", "well_depth_m"),
              qaqc)
 
 # Mark bottomed out data with flag = 2
 data_full <- data_full %>% 
   mutate(flag = if_else(
-    revised_depth <= -0.68,
+    well_depth_m <= -0.67,
     2,
     flag
   )
@@ -2088,8 +2024,8 @@ data_full <- data_full %>%
 data_out <- data_full %>% 
   select(
     c(
-      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
-      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+      'well_id', 'timestamp', 'head_m', 'original_depth_m', 
+      'depth_avg', 'well_depth_m', 'offset_version', 'offset_value', 'flag', 'notes'
     )
   )
 
@@ -2105,18 +2041,17 @@ output_data <- bind_rows(output_data, data_out)
 
 # Add checks to output
 checks_final <- checks_final %>%
-  mutate("Site_ID" = site) %>% 
+  mutate("well_id" = site) %>% 
   rename(field_check_m = chk_m,
          logger_val_m = logger_date_mean_trimmed)
 output_checks <- bind_rows(output_checks, checks_final)
 
 rm(site, data, qaqc, pivot_history, 
    status, data_full, data_out, checks_final) 
-
 rm(offsets_to_use, new_offset, offset_cols_to_use, 
    offset_dates_to_use, offset_names_to_use, offset_vals_use)
-rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
-   all_offset_names, all_offsets, checks, depth_cols)
+rm(ts_cols, all_cols, all_offset_cols, all_offset_dates,
+   all_offset_names, all_offsets, checks)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # XX) Site: 15_409-------------------------------------------------------
@@ -2134,9 +2069,7 @@ print(status$Notes)
 data_full <- calc_stages_from_offsets(data, pivot_history)
 # Select columns to plot
 all_cols <- colnames(data_full)
-depth_cols <- grep('depth', all_cols, value=TRUE)
-not_to_plot <- c("sensor_depth")
-ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+ts_cols <- grep('depth', all_cols, value=TRUE)
 print(ts_cols)
 
 # Make plots
@@ -2153,7 +2086,6 @@ all_offset_cols <- c(all_offset_dates, all_offset_names)
 all_offsets <- pivot_history %>% 
   select(all_of(all_offset_cols))
 quick_plot_offset2(all_offsets)
-
 
 ## ------- C Revise water depth -----------------------------------------
 
@@ -2174,23 +2106,23 @@ data_full <- data_full %>%
   mutate(
     offset_version = offset_names_to_use,           
     offset_value   = new_offset,            
-    revised_depth  = sensor_depth - offset_value,
+    well_depth_m  = head_m - offset_value,
     flag           = 0,                      
     notes          = NA_character_
   )
 
 ## ------- D Plot the data with a revised offset -----------------------
 # anomaly remover 
-data_full <- anomaly_remover(data_full, 'revised_depth')
+data_full <- anomaly_remover(data_full, 'well_depth_m')
 
 make_site_ts(site_ts=data_full,
-             y_vars=c("original_depth", "revised_depth"),
+             y_vars=c("original_depth_m", "well_depth_m"),
              qaqc)
 
 # Flag the bottomed-out data
 data_full <- data_full %>% 
   mutate(flag = if_else(
-    revised_depth <= -0.525,
+    well_depth_m <= -0.51,
     2,
     flag
   )
@@ -2199,8 +2131,8 @@ data_full <- data_full %>%
 data_out <- data_full %>% 
   select(
     c(
-      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
-      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+      'well_id', 'timestamp', 'head_m', 'original_depth_m', 
+      'depth_avg', 'well_depth_m', 'offset_version', 'offset_value', 'flag', 'notes'
     )
   )
 
@@ -2216,18 +2148,17 @@ output_data <- bind_rows(output_data, data_out)
 
 # Add checks to output
 checks_final <- checks_final %>%
-  mutate("Site_ID" = site) %>% 
+  mutate("well_id" = site) %>% 
   rename(field_check_m = chk_m,
          logger_val_m = logger_date_mean_trimmed)
 output_checks <- bind_rows(output_checks, checks_final)
 
 rm(site, data, qaqc, pivot_history, 
    status, data_full, data_out, checks_final) 
-
 rm(offsets_to_use, new_offset, offset_cols_to_use, 
    offset_dates_to_use, offset_names_to_use, offset_vals_use)
-rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
-   all_offset_names, all_offsets, checks, depth_cols)
+rm(ts_cols, all_cols, all_offset_cols, all_offset_dates,
+   all_offset_names, all_offsets, checks)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # XXI) Site: 15_516-------------------------------------------------------
@@ -2245,9 +2176,7 @@ print(status$Notes)
 data_full <- calc_stages_from_offsets(data, pivot_history)
 # Select columns to plot
 all_cols <- colnames(data_full)
-depth_cols <- grep('depth', all_cols, value=TRUE)
-not_to_plot <- c("sensor_depth")
-ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+ts_cols <- grep('depth', all_cols, value=TRUE)
 print(ts_cols)
 
 # Make plots
@@ -2264,7 +2193,6 @@ all_offset_cols <- c(all_offset_dates, all_offset_names)
 all_offsets <- pivot_history %>% 
   select(all_of(all_offset_cols))
 quick_plot_offset2(all_offsets)
-
 
 ## ------- C Revise water depth -----------------------------------------
 
@@ -2285,7 +2213,7 @@ data_full <- data_full %>%
   mutate(
     offset_version = offset_names_to_use,           
     offset_value   = new_offset,            
-    revised_depth  = sensor_depth - offset_value,
+    well_depth_m  = head_m - offset_value,
     flag           = 0,                      
     notes          = NA_character_
   )
@@ -2293,16 +2221,16 @@ data_full <- data_full %>%
 ## ------- D Plot the data with a revised offset -----------------------
 
 # Run the anomaly remover
-data_full <- anomaly_remover(data_full, 'revised_depth')
+data_full <- anomaly_remover(data_full, 'well_depth_m')
 
 make_site_ts(site_ts=data_full,
-             y_vars=c("original_depth", "revised_depth"),
+             y_vars=c("original_depth_m", "well_depth_m"),
              qaqc)
 
 # Note the bottomed out data
 data_full <- data_full %>% 
   mutate(flag = if_else(
-    revised_depth <= -0.55,
+    well_depth_m <= -0.54,
     2,
     flag
   )
@@ -2311,8 +2239,8 @@ data_full <- data_full %>%
 data_out <- data_full %>% 
   select(
     c(
-      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
-      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+      'well_id', 'timestamp', 'head_m', 'original_depth_m', 
+      'depth_avg', 'well_depth_m', 'offset_version', 'offset_value', 'flag', 'notes'
     )
   )
 
@@ -2328,18 +2256,17 @@ output_data <- bind_rows(output_data, data_out)
 
 # Add checks to output
 checks_final <- checks_final %>%
-  mutate("Site_ID" = site) %>% 
+  mutate("well_id" = site) %>% 
   rename(field_check_m = chk_m,
          logger_val_m = logger_date_mean_trimmed)
 output_checks <- bind_rows(output_checks, checks_final)
 
 rm(site, data, qaqc, pivot_history, 
    status, data_full, data_out, checks_final) 
-
 rm(offsets_to_use, new_offset, offset_cols_to_use, 
    offset_dates_to_use, offset_names_to_use, offset_vals_use)
-rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
-   all_offset_names, all_offsets, checks, depth_cols)
+rm(ts_cols, all_cols, all_offset_cols, all_offset_dates,
+   all_offset_names, all_offsets, checks)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # XXII) Site: 3_173-------------------------------------------------------
@@ -2357,9 +2284,7 @@ print(status$Notes)
 data_full <- calc_stages_from_offsets(data, pivot_history)
 # Select columns to plot
 all_cols <- colnames(data_full)
-depth_cols <- grep('depth', all_cols, value=TRUE)
-not_to_plot <- c("sensor_depth")
-ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+ts_cols <- grep('depth', all_cols, value=TRUE)
 print(ts_cols)
 
 # Make plots
@@ -2376,7 +2301,6 @@ all_offset_cols <- c(all_offset_dates, all_offset_names)
 all_offsets <- pivot_history %>% 
   select(all_of(all_offset_cols))
 quick_plot_offset2(all_offsets)
-
 
 ## ------- C Revise water depth -----------------------------------------
 
@@ -2397,23 +2321,23 @@ data_full <- data_full %>%
   mutate(
     offset_version = offset_names_to_use,           
     offset_value   = new_offset,            
-    revised_depth  = sensor_depth - offset_value,
+    well_depth_m  = head_m - offset_value,
     flag           = 0,                      
     notes          = NA_character_
   )
 
 ## ------- D Plot the data with a revised offset -----------------------
 # Run the anomaly remover
-data_full <- anomaly_remover(data_full, 'revised_depth')
+data_full <- anomaly_remover(data_full, 'well_depth_m')
 
 make_site_ts(site_ts=data_full,
-             y_vars=c("original_depth", "revised_depth"),
+             y_vars=c("original_depth_m", "well_depth_m"),
              qaqc)
 
 # Flag the bottomed out data
 data_full <- data_full %>% 
   mutate(flag = if_else(
-    revised_depth <= -0.47,
+    well_depth_m <= -0.47,
     2,
     flag
   )
@@ -2422,8 +2346,8 @@ data_full <- data_full %>%
 data_out <- data_full %>% 
   select(
     c(
-      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
-      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+      'well_id', 'timestamp', 'head_m', 'original_depth_m', 
+      'depth_avg', 'well_depth_m', 'offset_version', 'offset_value', 'flag', 'notes'
     )
   )
 
@@ -2439,18 +2363,17 @@ output_data <- bind_rows(output_data, data_out)
 
 # Add checks to output
 checks_final <- checks_final %>%
-  mutate("Site_ID" = site) %>% 
+  mutate("well_id" = site) %>% 
   rename(field_check_m = chk_m,
          logger_val_m = logger_date_mean_trimmed)
 output_checks <- bind_rows(output_checks, checks_final)
 
 rm(site, data, qaqc, pivot_history, 
    status, data_full, data_out, checks_final) 
-
 rm(offsets_to_use, new_offset, offset_cols_to_use, 
    offset_dates_to_use, offset_names_to_use, offset_vals_use)
-rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
-   all_offset_names, all_offsets, checks, depth_cols)
+rm(ts_cols, all_cols, all_offset_cols, all_offset_dates,
+   all_offset_names, all_offsets, checks)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # XXIII) Site: 3_21-------------------------------------------------------
@@ -2468,9 +2391,7 @@ print(status$Notes)
 data_full <- calc_stages_from_offsets(data, pivot_history)
 # Select columns to plot
 all_cols <- colnames(data_full)
-depth_cols <- grep('depth', all_cols, value=TRUE)
-not_to_plot <- c("sensor_depth")
-ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+ts_cols <- grep('depth', all_cols, value=TRUE)
 print(ts_cols)
 
 # Make plots
@@ -2508,33 +2429,37 @@ data_full <- data_full %>%
   mutate(
     offset_version = offset_names_to_use,           
     offset_value   = new_offset,            
-    revised_depth  = sensor_depth - offset_value,
+    well_depth_m  = head_m - offset_value,
     flag           = 0,                      
     notes          = NA_character_
   )
 
 ## ------- D Plot the data with a revised offset -----------------------
 # run the anomaly remover
-data_full <- anomaly_remover(data_full, 'revised_depth')
+data_full <- anomaly_remover(data_full, 'well_depth_m')
 
 make_site_ts(site_ts=data_full,
-             y_vars=c("original_depth", "revised_depth"),
+             y_vars=c("original_depth_m", "well_depth_m"),
              qaqc)
 
 # Flag bottomed out data with flag =2
 data_full <- data_full %>% 
   mutate(flag = if_else(
-    revised_depth <= -0.765,
+    well_depth_m <= -0.77,
     2,
     flag
   )
 )
 
+# Removing bad data 0.5 meter drop randomly between Jul 14th and Aug 3rd 2023
+data_full <- data_full %>% 
+  filter(timestamp < as.POSIXct('2023-07-14') | timestamp > as.POSIXct('2023-08-04'))
+
 data_out <- data_full %>% 
   select(
     c(
-      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
-      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+      'well_id', 'timestamp', 'head_m', 'original_depth_m', 
+      'depth_avg', 'well_depth_m', 'offset_version', 'offset_value', 'flag', 'notes'
     )
   )
 
@@ -2550,18 +2475,17 @@ output_data <- bind_rows(output_data, data_out)
 
 # Add checks to output
 checks_final <- checks_final %>%
-  mutate("Site_ID" = site) %>% 
+  mutate("well_id" = site) %>% 
   rename(field_check_m = chk_m,
          logger_val_m = logger_date_mean_trimmed)
 output_checks <- bind_rows(output_checks, checks_final)
 
 rm(site, data, qaqc, pivot_history, 
    status, data_full, data_out, checks_final) 
-
 rm(offsets_to_use, new_offset, offset_cols_to_use, 
    offset_dates_to_use, offset_names_to_use, offset_vals_use)
-rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
-   all_offset_names, all_offsets, checks, depth_cols)
+rm(ts_cols, all_cols, all_offset_cols, all_offset_dates,
+   all_offset_names, all_offsets, checks)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # XXIV) Site: 3_23-------------------------------------------------------
@@ -2579,9 +2503,7 @@ print(status$Notes)
 data_full <- calc_stages_from_offsets(data, pivot_history)
 # Select columns to plot
 all_cols <- colnames(data_full)
-depth_cols <- grep('depth', all_cols, value=TRUE)
-not_to_plot <- c("sensor_depth")
-ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+ts_cols <- grep('depth', all_cols, value=TRUE)
 print(ts_cols)
 
 # Make plots
@@ -2618,18 +2540,18 @@ data_full <- data_full %>%
   mutate(
     offset_version = offset_names_to_use,           
     offset_value   = new_offset,            
-    revised_depth  = sensor_depth - offset_value,
-    flag           = if_else(Date >= '2024-05-03', 1, 0),                      
-    notes          = if_else(Date >= '2024-05-03', 'Post May 3rd 2024, bad field check agreement.', NA_character_)
+    well_depth_m  = head_m - offset_value,
+    flag           = if_else(timestamp >= as.POSIXct('2024-05-03'), 1, 0),                      
+    notes          = if_else(timestamp >= as.POSIXct('2024-05-03'), 'Post May 3rd 2024, bad field check agreement.', NA_character_)
   )
 
 ## ------- D Plot the data with a revised offset -----------------------
 
 # Run the anomaly remover
-data_full <- anomaly_remover(data_full, 'revised_depth')
+data_full <- anomaly_remover(data_full, 'well_depth_m')
 
 make_site_ts(site_ts=data_full,
-             y_vars=c("original_depth", "revised_depth"),
+             y_vars=c("original_depth_m", "well_depth_m"),
              qaqc)
 
 # NOTE: well does not bottom out, TBD for depth limit flag. 
@@ -2637,8 +2559,8 @@ make_site_ts(site_ts=data_full,
 data_out <- data_full %>% 
   select(
     c(
-      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
-      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+      'well_id', 'timestamp', 'head_m', 'original_depth_m', 
+      'depth_avg', 'well_depth_m', 'offset_version', 'offset_value', 'flag', 'notes'
     )
   )
 
@@ -2654,18 +2576,17 @@ output_data <- bind_rows(output_data, data_out)
 
 # Add checks to output
 checks_final <- checks_final %>%
-  mutate("Site_ID" = site) %>% 
+  mutate("well_id" = site) %>% 
   rename(field_check_m = chk_m,
          logger_val_m = logger_date_mean_trimmed)
 output_checks <- bind_rows(output_checks, checks_final)
 
 rm(site, data, qaqc, pivot_history, 
    status, data_full, data_out, checks_final) 
-
 rm(offsets_to_use, new_offset, offset_cols_to_use, 
    offset_dates_to_use, offset_names_to_use, offset_vals_use)
-rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
-   all_offset_names, all_offsets, checks, depth_cols)
+rm(ts_cols, all_cols, all_offset_cols, all_offset_dates,
+   all_offset_names, all_offsets, checks)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # XXV) Site: 3_244-------------------------------------------------------
@@ -2683,9 +2604,7 @@ print(status$Notes)
 data_full <- calc_stages_from_offsets(data, pivot_history)
 # Select columns to plot
 all_cols <- colnames(data_full)
-depth_cols <- grep('depth', all_cols, value=TRUE)
-not_to_plot <- c("sensor_depth")
-ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+ts_cols <- grep('depth', all_cols, value=TRUE)
 print(ts_cols)
 
 # Make plots
@@ -2722,24 +2641,24 @@ data_full <- data_full %>%
   mutate(
     offset_version = offset_names_to_use,           
     offset_value   = new_offset,            
-    revised_depth  = sensor_depth - offset_value,
-    flag           = if_else(Date >= '2023-06-23', 1, 0),                      
-    notes          = if_else(Date >= '2023-06-23', 'Limited field checks. Bottom-out depth change? Need more QAQC', NA_character_)    
+    well_depth_m  = head_m - offset_value,
+    flag           = if_else(timestamp >= as.POSIXct('2023-06-23'), 1, 0),                      
+    notes          = if_else(timestamp >= as.POSIXct('2023-06-23'), 'Limited field checks. Bottom-out depth change? Need more QAQC', NA_character_)    
   )
 
 ## ------- D Plot the data with a revised offset -----------------------
 
 # Run the anomaly remover
-data_full <- anomaly_remover(data_full, 'revised_depth')
+data_full <- anomaly_remover(data_full, 'well_depth_m')
 
 make_site_ts(site_ts=data_full,
-             y_vars=c("original_depth", "revised_depth"),
+             y_vars=c("original_depth_m", "well_depth_m"),
              qaqc)
 
 # Flag the bottomed out data = 2
 data_full <- data_full %>% 
   mutate(flag = if_else(
-    revised_depth <= -0.72,
+    well_depth_m <= -0.72,
     2,
     flag
   )
@@ -2748,8 +2667,8 @@ data_full <- data_full %>%
 data_out <- data_full %>% 
   select(
     c(
-      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
-      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+      'well_id', 'timestamp', 'head_m', 'original_depth_m', 
+      'depth_avg', 'well_depth_m', 'offset_version', 'offset_value', 'flag', 'notes'
     )
   )
 
@@ -2765,18 +2684,17 @@ output_data <- bind_rows(output_data, data_out)
 
 # Add checks to output
 checks_final <- checks_final %>%
-  mutate("Site_ID" = site) %>% 
+  mutate("well_id" = site) %>% 
   rename(field_check_m = chk_m,
          logger_val_m = logger_date_mean_trimmed)
 output_checks <- bind_rows(output_checks, checks_final)
 
 rm(site, data, qaqc, pivot_history, 
    status, data_full, data_out, checks_final) 
-
 rm(offsets_to_use, new_offset, offset_cols_to_use, 
    offset_dates_to_use, offset_names_to_use, offset_vals_use)
-rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
-   all_offset_names, all_offsets, checks, depth_cols)
+rm(ts_cols, all_cols, all_offset_cols, all_offset_dates,
+   all_offset_names, all_offsets, checks)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # XXVI) Site: 3_311-------------------------------------------------------
@@ -2794,9 +2712,7 @@ print(status$Notes)
 data_full <- calc_stages_from_offsets(data, pivot_history)
 # Select columns to plot
 all_cols <- colnames(data_full)
-depth_cols <- grep('depth', all_cols, value=TRUE)
-not_to_plot <- c("sensor_depth")
-ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+ts_cols <- grep('depth', all_cols, value=TRUE)
 print(ts_cols)
 
 # Make plots
@@ -2833,23 +2749,23 @@ data_full <- data_full %>%
   mutate(
     offset_version = offset_names_to_use,           
     offset_value   = new_offset,            
-    revised_depth  = sensor_depth - offset_value,
+    well_depth_m  = head_m - offset_value,
     flag           = 0,                      
     notes          = NA_character_
   )
 
 ## ------- D Plot the data with a revised offset -----------------------
 # Run the anomaly remover
-data_full <- anomaly_remover(data_full, 'revised_depth')
+data_full <- anomaly_remover(data_full, 'well_depth_m')
 
 make_site_ts(site_ts=data_full,
-             y_vars=c("original_depth", "revised_depth"),
+             y_vars=c("original_depth_m", "well_depth_m"),
              qaqc)
 
 # Flag bottomed out data with flag = 2
 data_full <- data_full %>% 
   mutate(flag = if_else(
-    revised_depth <= -0.68,
+    well_depth_m <= -0.68,
     2,
     flag
   )
@@ -2858,8 +2774,8 @@ data_full <- data_full %>%
 data_out <- data_full %>% 
   select(
     c(
-      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
-      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+      'well_id', 'timestamp', 'head_m', 'original_depth_m', 
+      'depth_avg', 'well_depth_m', 'offset_version', 'offset_value', 'flag', 'notes'
     )
   )
 
@@ -2875,18 +2791,17 @@ output_data <- bind_rows(output_data, data_out)
 
 # Add checks to output
 checks_final <- checks_final %>%
-  mutate("Site_ID" = site) %>% 
+  mutate("well_id" = site) %>% 
   rename(field_check_m = chk_m,
          logger_val_m = logger_date_mean_trimmed)
 output_checks <- bind_rows(output_checks, checks_final)
 
 rm(site, data, qaqc, pivot_history, 
    status, data_full, data_out, checks_final) 
-
 rm(offsets_to_use, new_offset, offset_cols_to_use, 
    offset_dates_to_use, offset_names_to_use, offset_vals_use)
-rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
-   all_offset_names, all_offsets, checks, depth_cols)
+rm(ts_cols, all_cols, all_offset_cols, all_offset_dates,
+   all_offset_names, all_offsets, checks)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # XXVII) Site: 3_34-------------------------------------------------------
@@ -2904,9 +2819,7 @@ print(status$Notes)
 data_full <- calc_stages_from_offsets(data, pivot_history)
 # Select columns to plot
 all_cols <- colnames(data_full)
-depth_cols <- grep('depth', all_cols, value=TRUE)
-not_to_plot <- c("sensor_depth")
-ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+ts_cols <- grep('depth', all_cols, value=TRUE)
 print(ts_cols)
 
 # Make plots
@@ -2948,54 +2861,57 @@ new_offset2 <- 0.50
 data_full <- data_full %>% 
   mutate(
     offset_version = case_when(
-      Date <=  as.Date("2024-05-02") ~ offset_names_to_use1,
-      Date >=  as.Date("2024-05-04") ~ offset_names_to_use2,
+      timestamp <=  as.POSIXct("2024-05-02") ~ offset_names_to_use1,
+      timestamp >=  as.POSIXct("2024-05-04") ~ offset_names_to_use2,
       TRUE                          ~ NA_character_  # "Between" dates get NA 
     ),
     offset_value = case_when(
-      Date <=  as.Date("2024-05-02") ~ new_offset1,
-      Date >=  as.Date("2024-05-04") ~ new_offset2,
+      timestamp <=  as.POSIXct("2024-05-02") ~ new_offset1,
+      timestamp >=  as.POSIXct("2024-05-04") ~ new_offset2,
       TRUE                          ~ NA_real_
     ),
     flag = case_when(
-      Date <=  as.Date("2024-05-02") ~ 0,
-      Date >=  as.Date("2024-05-04") ~ 1,
+      timestamp <=  as.POSIXct("2024-05-02") ~ 0,
+      timestamp >=  as.POSIXct("2024-05-04") ~ 1,
       TRUE                          ~ NA_real_
     ),
     notes = case_when(
-      Date <=  as.Date("2024-05-02") ~ NA_character_,
-      Date >=  as.Date("2024-05-04") ~ 'Data shifted on download date. Estimated new offset, but bottom out depth changes.',
+      timestamp <=  as.POSIXct("2024-05-02") ~ NA_character_,
+      timestamp >=  as.POSIXct("2024-05-04") ~ 'Data shifted on download date. Estimated new offset, but bottom out depth changes.',
       TRUE                          ~ NA_character_
     ),
-    revised_depth = case_when(
-      Date <  as.Date("2024-05-02") ~ sensor_depth - offset_value,
-      Date >  as.Date("2024-05-04") ~ sensor_depth - offset_value,
+    well_depth_m = case_when(
+      # Removing the bad data around the download date. 
+      timestamp <  as.POSIXct("2024-05-02") ~ head_m - offset_value,
+      timestamp >  as.POSIXct("2024-05-04") ~ head_m - offset_value,
       TRUE ~ NA_real_
     ),
   )
 
 ## ------- D Plot the data with a revised offset -----------------------
 # Run the anomaly remover
-data_full <- anomaly_remover(data_full, 'revised_depth')
+data_full <- anomaly_remover(data_full, 'well_depth_m')
 
 make_site_ts(site_ts=data_full,
-             y_vars=c("original_depth", "revised_depth"),
+             y_vars=c("original_depth_m", "well_depth_m"),
              qaqc)
 
 # Flag bottomed out data with flag = 2
+# Bottomed out depth changes pay attention to 2025 field checks. 
 data_full <- data_full %>% 
-  mutate(flag = if_else(
-    revised_depth <= -0.44, 
-    2,
-    flag
+  mutate(
+    flag = case_when(
+      well_depth_m <= -0.57 & timestamp < as.POSIXct("2024-05-02") ~ 2,
+      well_depth_m <= -0.44 & timestamp > as.POSIXct("2024-05-04") ~ 2,
+      TRUE ~ flag
   )
 )
 
 data_out <- data_full %>% 
   select(
     c(
-      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
-      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+      'well_id', 'timestamp', 'head_m', 'original_depth_m', 
+      'depth_avg', 'well_depth_m', 'offset_version', 'offset_value', 'flag', 'notes'
     )
   )
 
@@ -3011,19 +2927,18 @@ output_data <- bind_rows(output_data, data_out)
 
 # Add checks to output
 checks_final <- checks_final %>%
-  mutate("Site_ID" = site) %>% 
+  mutate("well_id" = site) %>% 
   rename(field_check_m = chk_m,
          logger_val_m = logger_date_mean_trimmed)
 output_checks <- bind_rows(output_checks, checks_final)
 
 rm(site, data, qaqc, pivot_history, 
    status, data_full, data_out, checks_final) 
-
 rm(offsets_to_use, new_offset1, new_offset2, offset_cols_to_use, 
    offset_dates_to_use, offset_names_to_use, offset_vals_use,
    offset_names_to_use1, offset_names_to_use2)
-rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
-   all_offset_names, all_offsets, checks, depth_cols)
+rm(ts_cols, all_cols, all_offset_cols, all_offset_dates,
+   all_offset_names, all_offsets, checks)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # XXVIII) Site: 3_638-------------------------------------------------------
@@ -3041,9 +2956,7 @@ print(status$Notes)
 data_full <- calc_stages_from_offsets(data, pivot_history)
 # Select columns to plot
 all_cols <- colnames(data_full)
-depth_cols <- grep('depth', all_cols, value=TRUE)
-not_to_plot <- c("sensor_depth")
-ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+ts_cols <- grep('depth', all_cols, value=TRUE)
 print(ts_cols)
 
 # Make plots
@@ -3084,38 +2997,39 @@ new_offset2 <- 0.52
 data_full <- data_full %>% 
   mutate(
     offset_version = case_when(
-      Date <=  as.Date("2024-05-02") ~ offset_names_to_use1,
-      Date >=  as.Date("2024-05-04") ~ offset_names_to_use2,
+      timestamp <=  as.POSIXct("2024-05-02") ~ offset_names_to_use1,
+      timestamp >=  as.POSIXct("2024-05-04") ~ offset_names_to_use2,
       TRUE                          ~ NA_character_  # "Between" dates get NA 
     ),
     offset_value = case_when(
-      Date <=  as.Date("2024-05-02") ~ new_offset1,
-      Date >=  as.Date("2024-05-04") ~ new_offset2,
+      timestamp <=  as.POSIXct("2024-05-02") ~ new_offset1,
+      timestamp >=  as.POSIXct("2024-05-04") ~ new_offset2,
       TRUE                          ~ NA_real_
     ),
     flag = case_when(
-      Date <=  as.Date("2024-05-02") ~ 0,
-      Date >=  as.Date("2024-05-04") ~ 1,
+      timestamp <=  as.POSIXct("2024-05-02") ~ 0,
+      timestamp >=  as.POSIXct("2024-05-04") ~ 1,
       TRUE                          ~ NA_real_
     ),
     notes = case_when(
-      Date <=  as.Date("2024-05-02") ~ NA_character_,
-      Date >=  as.Date("2024-05-04") ~ 'Data shifted on download date. Estimated new offset, but bottom out depth changes.',
+      timestamp <=  as.POSIXct("2024-05-02") ~ NA_character_,
+      timestamp >=  as.POSIXct("2024-05-04") ~ 'Data shifted on download date. Estimated new offset; bottom out depth changes.',
       TRUE                          ~ NA_character_
     ),
-    revised_depth = case_when(
-      Date <  as.Date("2024-05-02") ~ sensor_depth - offset_value,
-      Date >  as.Date("2024-05-04") ~ sensor_depth - offset_value,
+    well_depth_m = case_when(
+      # Removes short period around the bad download date
+      timestamp <  as.POSIXct("2024-05-02") ~ head_m - offset_value,
+      timestamp >  as.POSIXct("2024-05-04") ~ head_m - offset_value,
       TRUE ~ NA_real_
     ),
   )
 
 ## ------- D Plot the data with a revised offset -----------------------
 # Run the anomaly remover 
-data_full <- anomaly_remover(data_full, 'revised_depth')
+data_full <- anomaly_remover(data_full, 'well_depth_m')
 
 make_site_ts(site_ts=data_full,
-             y_vars=c("original_depth", "revised_depth"),
+             y_vars=c("original_depth_m", "well_depth_m"),
              qaqc)
 
 # NOTE: timeseries does not bottom out, so bottom out depth is TBD.
@@ -3123,8 +3037,8 @@ make_site_ts(site_ts=data_full,
 data_out <- data_full %>% 
   select(
     c(
-      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
-      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+      'well_id', 'timestamp', 'head_m', 'original_depth_m', 
+      'depth_avg', 'well_depth_m', 'offset_version', 'offset_value', 'flag', 'notes'
     )
   )
 
@@ -3140,7 +3054,7 @@ output_data <- bind_rows(output_data, data_out)
 
 # Add checks to output
 checks_final <- checks_final %>%
-  mutate("Site_ID" = site) %>% 
+  mutate("well_id" = site) %>% 
   rename(field_check_m = chk_m,
          logger_val_m = logger_date_mean_trimmed)
 output_checks <- bind_rows(output_checks, checks_final)
@@ -3150,8 +3064,8 @@ rm(site, data, qaqc, pivot_history,
 rm(offsets_to_use, new_offset1, new_offset2, offset_cols_to_use, 
    offset_dates_to_use, offset_names_to_use, offset_vals_use,
    offset_names_to_use1, offset_names_to_use2)
-rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
-   all_offset_names, all_offsets, checks, depth_cols)
+rm(ts_cols, all_cols, all_offset_cols, all_offset_dates,
+   all_offset_names, all_offsets, checks)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # XXIX) Site: 5_161-------------------------------------------------------
@@ -3169,9 +3083,7 @@ print(status$Notes)
 data_full <- calc_stages_from_offsets(data, pivot_history)
 # Select columns to plot
 all_cols <- colnames(data_full)
-depth_cols <- grep('depth', all_cols, value=TRUE)
-not_to_plot <- c("sensor_depth")
-ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+ts_cols <- grep('depth', all_cols, value=TRUE)
 print(ts_cols)
 
 # Make plots
@@ -3208,7 +3120,7 @@ data_full <- data_full %>%
   mutate(
     offset_version = offset_names_to_use,           
     offset_value   = new_offset,            
-    revised_depth  = sensor_depth - offset_value,
+    well_depth_m  = head_m - offset_value,
     flag           = 0,                      
     notes          = NA_character_
   )
@@ -3216,16 +3128,16 @@ data_full <- data_full %>%
 ## ------- D Plot the data with a revised offset -----------------------
 
 # run the anomaly remover
-data_full <- anomaly_remover(data_full, 'revised_depth')
+data_full <- anomaly_remover(data_full, 'well_depth_m')
 
 make_site_ts(site_ts=data_full,
-             y_vars=c("revised_depth"),
+             y_vars=c("original_depth_m", "well_depth_m"),
              qaqc)
 
 # Note the bottom-out depth with flag = 2
 data_full <- data_full %>% 
   mutate(flag = if_else(
-    revised_depth <= -0.715,
+    well_depth_m <= -0.70,
     2,
     flag
   )
@@ -3234,8 +3146,8 @@ data_full <- data_full %>%
 data_out <- data_full %>% 
   select(
     c(
-      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
-      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+      'well_id', 'timestamp', 'head_m', 'original_depth_m', 
+      'depth_avg', 'well_depth_m', 'offset_version', 'offset_value', 'flag', 'notes'
     )
   )
 
@@ -3251,18 +3163,17 @@ output_data <- bind_rows(output_data, data_out)
 
 # Add checks to output
 checks_final <- checks_final %>%
-  mutate("Site_ID" = site) %>% 
+  mutate("well_id" = site) %>% 
   rename(field_check_m = chk_m,
          logger_val_m = logger_date_mean_trimmed)
 output_checks <- bind_rows(output_checks, checks_final)
 
 rm(site, data, qaqc, pivot_history, 
    status, data_full, data_out, checks_final) 
-
 rm(offsets_to_use, new_offset, offset_cols_to_use, 
    offset_dates_to_use, offset_names_to_use, offset_vals_use)
-rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
-   all_offset_names, all_offsets, checks, depth_cols)
+rm(ts_cols, all_cols, all_offset_cols, all_offset_dates,
+   all_offset_names, all_offsets, checks)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # XXX) Site: 5_321-------------------------------------------------------
@@ -3280,9 +3191,7 @@ print(status$Notes)
 data_full <- calc_stages_from_offsets(data, pivot_history)
 # Select columns to plot
 all_cols <- colnames(data_full)
-depth_cols <- grep('depth', all_cols, value=TRUE)
-not_to_plot <- c("sensor_depth")
-ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+ts_cols <- grep('depth', all_cols, value=TRUE)
 print(ts_cols)
 
 # Make plots
@@ -3319,7 +3228,7 @@ data_full <- data_full %>%
   mutate(
     offset_version = offset_names_to_use,           
     offset_value   = new_offset,            
-    revised_depth  = sensor_depth - offset_value,
+    well_depth_m  = head_m - offset_value,
     flag           = 0,                      
     notes          = NA_character_
   )
@@ -3327,10 +3236,10 @@ data_full <- data_full %>%
 ## ------- D Plot the data with a revised offset -----------------------
 
 # Run the anomaly remover
-data_full <- anomaly_remover(data_full, 'revised_depth')
+data_full <- anomaly_remover(data_full, 'well_depth_m')
 
 make_site_ts(site_ts=data_full,
-             y_vars=c("original_depth", "revised_depth"),
+             y_vars=c("original_depth_m", "well_depth_m"),
              qaqc)
 
 # NOTE: the well soes not appear to bottom out. Bottoming out depth is TBD. 
@@ -3338,8 +3247,8 @@ make_site_ts(site_ts=data_full,
 data_out <- data_full %>% 
   select(
     c(
-      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
-      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+      'well_id', 'timestamp', 'head_m', 'original_depth_m', 
+      'depth_avg', 'well_depth_m', 'offset_version', 'offset_value', 'flag', 'notes'
     )
   )
 
@@ -3355,19 +3264,17 @@ output_data <- bind_rows(output_data, data_out)
 
 # Add checks to output
 checks_final <- checks_final %>%
-  mutate("Site_ID" = site) %>% 
+  mutate("well_id" = site) %>% 
   rename(field_check_m = chk_m,
          logger_val_m = logger_date_mean_trimmed)
 output_checks <- bind_rows(output_checks, checks_final)
 
 rm(site, data, qaqc, pivot_history, 
    status, data_full, data_out, checks_final) 
-
 rm(offsets_to_use, new_offset, offset_cols_to_use, 
    offset_dates_to_use, offset_names_to_use, offset_vals_use)
-rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
-   all_offset_names, all_offsets, checks, depth_cols)
-
+rm(ts_cols, all_cols, all_offset_cols, all_offset_dates,
+   all_offset_names, all_offsets, checks)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # XXXI) Site: 5_510-------------------------------------------------------
@@ -3385,9 +3292,7 @@ print(status$Notes)
 data_full <- calc_stages_from_offsets(data, pivot_history)
 # Select columns to plot
 all_cols <- colnames(data_full)
-depth_cols <- grep('depth', all_cols, value=TRUE)
-not_to_plot <- c("sensor_depth")
-ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+ts_cols <- grep('depth', all_cols, value=TRUE)
 print(ts_cols)
 
 # Make plots
@@ -3424,7 +3329,7 @@ data_full <- data_full %>%
   mutate(
     offset_version = offset_names_to_use,           
     offset_value   = new_offset,            
-    revised_depth  = sensor_depth - offset_value,
+    well_depth_m  = head_m - offset_value,
     flag           = 0,                      
     notes          = NA_character_
   )
@@ -3432,16 +3337,16 @@ data_full <- data_full %>%
 ## ------- D Plot the data with a revised offset -----------------------
 
 # run the anomaly remover
-data_full <- anomaly_remover(data_full, 'revised_depth')
+data_full <- anomaly_remover(data_full, 'well_depth_m')
 
 make_site_ts(site_ts=data_full,
-             y_vars=c("original_depth", "revised_depth"),
+             y_vars=c("original_depth_m", "well_depth_m"),
              qaqc)
 
 # Flag the bottomed-out data = 2
 data_full <- data_full %>% 
   mutate(flag = if_else(
-    revised_depth <= -0.615,
+    well_depth_m <= -0.60,
     2,
     flag
   )
@@ -3450,8 +3355,8 @@ data_full <- data_full %>%
 data_out <- data_full %>% 
   select(
     c(
-      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
-      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+      'well_id', 'timestamp', 'head_m', 'original_depth_m', 
+      'depth_avg', 'well_depth_m', 'offset_version', 'offset_value', 'flag', 'notes'
     )
   )
 
@@ -3467,18 +3372,17 @@ output_data <- bind_rows(output_data, data_out)
 
 # Add checks to output
 checks_final <- checks_final %>%
-  mutate("Site_ID" = site) %>% 
+  mutate("well_id" = site) %>% 
   rename(field_check_m = chk_m,
          logger_val_m = logger_date_mean_trimmed)
 output_checks <- bind_rows(output_checks, checks_final)
 
 rm(site, data, qaqc, pivot_history, 
    status, data_full, data_out, checks_final) 
-
 rm(offsets_to_use, new_offset, offset_cols_to_use, 
    offset_dates_to_use, offset_names_to_use, offset_vals_use)
-rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
-   all_offset_names, all_offsets, checks, depth_cols)
+rm(ts_cols, all_cols, all_offset_cols, all_offset_dates,
+   all_offset_names, all_offsets, checks)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # XXXII) Site: 5_546-------------------------------------------------------
@@ -3496,9 +3400,7 @@ print(status$Notes)
 data_full <- calc_stages_from_offsets(data, pivot_history)
 # Select columns to plot
 all_cols <- colnames(data_full)
-depth_cols <- grep('depth', all_cols, value=TRUE)
-not_to_plot <- c("sensor_depth")
-ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+ts_cols <- grep('depth', all_cols, value=TRUE)
 print(ts_cols)
 
 # Make plots
@@ -3535,7 +3437,7 @@ data_full <- data_full %>%
   mutate(
     offset_version = offset_names_to_use,           
     offset_value   = new_offset,            
-    revised_depth  = sensor_depth - offset_value,
+    well_depth_m  = head_m - offset_value,
     flag           = 0,                      
     notes          = NA_character_
   )
@@ -3543,16 +3445,16 @@ data_full <- data_full %>%
 ## ------- D Plot the data with a revised offset -----------------------
 
 # run the anomaly remover
-data_full <- anomaly_remover(data_full, 'revised_depth')
+data_full <- anomaly_remover(data_full, 'well_depth_m')
 
 make_site_ts(site_ts=data_full,
-             y_vars=c("original_depth", "revised_depth"),
+             y_vars=c("original_depth_m", "well_depth_m"),
              qaqc)
 
 # Note the bottoming out depth with flag = 2
 data_full <- data_full %>% 
   mutate(flag = if_else(
-    revised_depth <= -1.055,
+    well_depth_m <= -1.04,
     2,
     flag
   )
@@ -3561,8 +3463,8 @@ data_full <- data_full %>%
 data_out <- data_full %>% 
   select(
     c(
-      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
-      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+      'well_id', 'timestamp', 'head_m', 'original_depth_m', 
+      'depth_avg', 'well_depth_m', 'offset_version', 'offset_value', 'flag', 'notes'
     )
   )
 
@@ -3578,18 +3480,17 @@ output_data <- bind_rows(output_data, data_out)
 
 # Add checks to output
 checks_final <- checks_final %>%
-  mutate("Site_ID" = site) %>% 
+  mutate("well_id" = site) %>% 
   rename(field_check_m = chk_m,
          logger_val_m = logger_date_mean_trimmed)
 output_checks <- bind_rows(output_checks, checks_final)
 
 rm(site, data, qaqc, pivot_history, 
    status, data_full, data_out, checks_final) 
-
 rm(offsets_to_use, new_offset, offset_cols_to_use, 
    offset_dates_to_use, offset_names_to_use, offset_vals_use)
-rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
-   all_offset_names, all_offsets, checks, depth_cols)
+rm(ts_cols, all_cols, all_offset_cols, all_offset_dates,
+   all_offset_names, all_offsets, checks)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # XXXIII) Site: 5_560-------------------------------------------------------
@@ -3607,9 +3508,7 @@ print(status$Notes)
 data_full <- calc_stages_from_offsets(data, pivot_history)
 # Select columns to plot
 all_cols <- colnames(data_full)
-depth_cols <- grep('depth', all_cols, value=TRUE)
-not_to_plot <- c("sensor_depth")
-ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+ts_cols <- grep('depth', all_cols, value=TRUE)
 print(ts_cols)
 
 # Make plots
@@ -3647,17 +3546,17 @@ data_full <- data_full %>%
   mutate(
     offset_version = offset_names_to_use,           
     offset_value   = new_offset,            
-    revised_depth  = sensor_depth - offset_value,
+    well_depth_m  = head_m - offset_value,
     flag           = 0,                      
     notes          = NA_character_
   )
 
 ## ------- D Plot the data with a revised offset -----------------------
 # run the anomaly remover
-data_full <- anomaly_remover(data_full, 'revised_depth')
+data_full <- anomaly_remover(data_full, 'well_depth_m')
 
 make_site_ts(site_ts=data_full,
-             y_vars=c("original_depth", "revised_depth"),
+             y_vars=c("original_depth_m", "well_depth_m"),
              qaqc)
 
 # NOTE: there is not a clear bottom-out depth for this site. TBD. 
@@ -3665,8 +3564,8 @@ make_site_ts(site_ts=data_full,
 data_out <- data_full %>% 
   select(
     c(
-      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
-      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+      'well_id', 'timestamp', 'head_m', 'original_depth_m', 
+      'depth_avg', 'well_depth_m', 'offset_version', 'offset_value', 'flag', 'notes'
     )
   )
 
@@ -3682,18 +3581,17 @@ output_data <- bind_rows(output_data, data_out)
 
 # Add checks to output
 checks_final <- checks_final %>%
-  mutate("Site_ID" = site) %>% 
+  mutate("well_id" = site) %>% 
   rename(field_check_m = chk_m,
          logger_val_m = logger_date_mean_trimmed)
 output_checks <- bind_rows(output_checks, checks_final)
 
 rm(site, data, qaqc, pivot_history, 
    status, data_full, data_out, checks_final) 
-
 rm(offsets_to_use, new_offset, offset_cols_to_use, 
    offset_dates_to_use, offset_names_to_use, offset_vals_use)
-rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
-   all_offset_names, all_offsets, checks, depth_cols)
+rm(ts_cols, all_cols, all_offset_cols, all_offset_dates,
+   all_offset_names, all_offsets, checks)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # XXXIV) Site: 5_573-------------------------------------------------------
@@ -3711,9 +3609,7 @@ print(status$Notes)
 data_full <- calc_stages_from_offsets(data, pivot_history)
 # Select columns to plot
 all_cols <- colnames(data_full)
-depth_cols <- grep('depth', all_cols, value=TRUE)
-not_to_plot <- c("sensor_depth")
-ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+ts_cols <- grep('depth', all_cols, value=TRUE)
 print(ts_cols)
 
 # Make plots
@@ -3751,23 +3647,23 @@ data_full <- data_full %>%
   mutate(
     offset_version = offset_names_to_use,           
     offset_value   = new_offset,            
-    revised_depth  = sensor_depth - offset_value,
+    well_depth_m  = head_m - offset_value,
     flag           = 0,                      
     notes          = NA_character_
   )
 
 ## ------- D Plot the data with a revised offset -----------------------
 # run the anomaly remover
-data_full <- anomaly_remover(data_full, 'revised_depth')
+data_full <- anomaly_remover(data_full, 'well_depth_m')
 
 make_site_ts(site_ts=data_full,
-             y_vars=c("original_depth", "revised_depth"),
+             y_vars=c("original_depth_m", "well_depth_m"),
              qaqc)
 
 # Note the bottom-out depth with flag = 2
 data_full <- data_full %>% 
   mutate(flag = if_else(
-    revised_depth <= -0.69,
+    well_depth_m <= -0.67,
     2,
     flag
   )
@@ -3776,8 +3672,8 @@ data_full <- data_full %>%
 data_out <- data_full %>% 
   select(
     c(
-      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
-      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+      'well_id', 'timestamp', 'head_m', 'original_depth_m', 
+      'depth_avg', 'well_depth_m', 'offset_version', 'offset_value', 'flag', 'notes'
     )
   )
 
@@ -3793,18 +3689,17 @@ output_data <- bind_rows(output_data, data_out)
 
 # Add checks to output
 checks_final <- checks_final %>%
-  mutate("Site_ID" = site) %>% 
+  mutate("well_id" = site) %>% 
   rename(field_check_m = chk_m,
          logger_val_m = logger_date_mean_trimmed)
 output_checks <- bind_rows(output_checks, checks_final)
 
 rm(site, data, qaqc, pivot_history, 
    status, data_full, data_out, checks_final) 
-
 rm(offsets_to_use, new_offset, offset_cols_to_use, 
    offset_dates_to_use, offset_names_to_use, offset_vals_use)
-rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
-   all_offset_names, all_offsets, checks, depth_cols)
+rm(ts_cols, all_cols, all_offset_cols, all_offset_dates,
+   all_offset_names, all_offsets, checks)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # XXXV) Site: 5_597 -------------------------------------------------------
@@ -3822,9 +3717,7 @@ print(status$Notes)
 data_full <- calc_stages_from_offsets(data, pivot_history)
 # Select columns to plot
 all_cols <- colnames(data_full)
-depth_cols <- grep('depth', all_cols, value=TRUE)
-not_to_plot <- c("sensor_depth")
-ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+ts_cols <- grep('depth', all_cols, value=TRUE)
 print(ts_cols)
 
 # Make plots
@@ -3862,23 +3755,23 @@ data_full <- data_full %>%
   mutate(
     offset_version = offset_names_to_use,           
     offset_value   = new_offset,            
-    revised_depth  = sensor_depth - offset_value,
+    well_depth_m  = head_m - offset_value,
     flag           = 0,                      
     notes          = NA_character_
   )
 
 ## ------- D Plot the data with a revised offset -----------------------
 # Run the anomaly remover
-data_full <- anomaly_remover(data_full, 'revised_depth')
+data_full <- anomaly_remover(data_full, 'well_depth_m')
 
 make_site_ts(site_ts=data_full,
-             y_vars=c("original_depth", "revised_depth"),
+             y_vars=c("original_depth_m", "well_depth_m"),
              qaqc)
 
 # Note the bottomed-out depth with flag = 2
 data_full <- data_full %>% 
   mutate(flag = if_else(
-    revised_depth <= -0.63,
+    well_depth_m <= -0.61,
     2,
     flag
   )
@@ -3887,8 +3780,8 @@ data_full <- data_full %>%
 data_out <- data_full %>% 
   select(
     c(
-      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
-      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+      'well_id', 'timestamp', 'head_m', 'original_depth_m', 
+      'depth_avg', 'well_depth_m', 'offset_version', 'offset_value', 'flag', 'notes'
     )
   )
 
@@ -3904,19 +3797,17 @@ output_data <- bind_rows(output_data, data_out)
 
 # Add checks to output
 checks_final <- checks_final %>%
-  mutate("Site_ID" = site) %>% 
+  mutate("well_id" = site) %>% 
   rename(field_check_m = chk_m,
          logger_val_m = logger_date_mean_trimmed)
 output_checks <- bind_rows(output_checks, checks_final)
 
 rm(site, data, qaqc, pivot_history, 
    status, data_full, data_out, checks_final) 
-
 rm(offsets_to_use, new_offset, offset_cols_to_use, 
    offset_dates_to_use, offset_names_to_use, offset_vals_use)
-rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
-   all_offset_names, all_offsets, checks, depth_cols)
-
+rm(ts_cols, all_cols, all_offset_cols, all_offset_dates,
+   all_offset_names, all_offsets, checks)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # XXXVI) Site: 5a_550 -------------------------------------------------------
@@ -3934,9 +3825,7 @@ print(status$Notes)
 data_full <- calc_stages_from_offsets(data, pivot_history)
 # Select columns to plot
 all_cols <- colnames(data_full)
-depth_cols <- grep('depth', all_cols, value=TRUE)
-not_to_plot <- c("sensor_depth")
-ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+ts_cols <- grep('depth', all_cols, value=TRUE)
 print(ts_cols)
 
 # Make plots
@@ -3974,23 +3863,23 @@ data_full <- data_full %>%
   mutate(
     offset_version = offset_names_to_use,           
     offset_value   = new_offset,            
-    revised_depth  = sensor_depth - offset_value,
+    well_depth_m  = head_m - offset_value,
     flag           = 0,                      
     notes          = NA_character_
   )
 
 ## ------- D Plot the data with a revised offset -----------------------
 # run the anomaly remover
-data_full <- anomaly_remover(data_full, 'revised_depth')
+data_full <- anomaly_remover(data_full, 'well_depth_m')
 
 make_site_ts(site_ts=data_full,
-             y_vars=c("original_depth", "revised_depth"),
+             y_vars=c("original_depth_m", "well_depth_m"),
              qaqc)
 
 # Note the bottomed-out depth with flag = 2
 data_full <- data_full %>% 
   mutate(flag = if_else(
-    revised_depth <= -0.26,
+    well_depth_m <= -0.23,
     2,
     flag
   )
@@ -3999,8 +3888,8 @@ data_full <- data_full %>%
 data_out <- data_full %>% 
   select(
     c(
-      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
-      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+      'well_id', 'timestamp', 'head_m', 'original_depth_m', 
+      'depth_avg', 'well_depth_m', 'offset_version', 'offset_value', 'flag', 'notes'
     )
   )
 
@@ -4016,18 +3905,17 @@ output_data <- bind_rows(output_data, data_out)
 
 # Add checks to output
 checks_final <- checks_final %>%
-  mutate("Site_ID" = site) %>% 
+  mutate("well_id" = site) %>% 
   rename(field_check_m = chk_m,
          logger_val_m = logger_date_mean_trimmed)
 output_checks <- bind_rows(output_checks, checks_final)
 
 rm(site, data, qaqc, pivot_history, 
    status, data_full, data_out, checks_final) 
-
 rm(offsets_to_use, new_offset, offset_cols_to_use, 
    offset_dates_to_use, offset_names_to_use, offset_vals_use)
-rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
-   all_offset_names, all_offsets, checks, depth_cols)
+rm(ts_cols, all_cols, all_offset_cols, all_offset_dates,
+   all_offset_names, all_offsets, checks)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # XXXVII) Site: 5a_582 -------------------------------------------------------
@@ -4045,9 +3933,7 @@ print(status$Notes)
 data_full <- calc_stages_from_offsets(data, pivot_history)
 # Select columns to plot
 all_cols <- colnames(data_full)
-depth_cols <- grep('depth', all_cols, value=TRUE)
-not_to_plot <- c("sensor_depth")
-ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+ts_cols <- grep('depth', all_cols, value=TRUE)
 print(ts_cols)
 
 # Make plots
@@ -4085,23 +3971,23 @@ data_full <- data_full %>%
   mutate(
     offset_version = offset_names_to_use,           
     offset_value   = new_offset,            
-    revised_depth  = sensor_depth - offset_value,
+    well_depth_m  = head_m - offset_value,
     flag           = 0,                      
     notes          = NA_character_
   )
 
 ## ------- D Plot the data with a revised offset -----------------------
 # Run the anomaly remover
-data_full <- anomaly_remover(data_full, 'revised_depth')
+data_full <- anomaly_remover(data_full, 'well_depth_m')
 
 make_site_ts(site_ts=data_full,
-             y_vars=c("original_depth", "revised_depth"),
+             y_vars=c("original_depth_m", "well_depth_m"),
              qaqc)
 
 # Remove bottomed-out data with flag = 2
 data_full <- data_full %>% 
   mutate(flag = if_else(
-    revised_depth <= -0.34,
+    well_depth_m <= -0.33,
     2,
     flag
   )
@@ -4110,8 +3996,8 @@ data_full <- data_full %>%
 data_out <- data_full %>% 
   select(
     c(
-      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
-      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+      'well_id', 'timestamp', 'head_m', 'original_depth_m', 
+      'depth_avg', 'well_depth_m', 'offset_version', 'offset_value', 'flag', 'notes'
     )
   )
 
@@ -4127,18 +4013,17 @@ output_data <- bind_rows(output_data, data_out)
 
 # Add checks to output
 checks_final <- checks_final %>%
-  mutate("Site_ID" = site) %>% 
+  mutate("well_id" = site) %>% 
   rename(field_check_m = chk_m,
          logger_val_m = logger_date_mean_trimmed)
 output_checks <- bind_rows(output_checks, checks_final)
 
 rm(site, data, qaqc, pivot_history, 
    status, data_full, data_out, checks_final) 
-
 rm(offsets_to_use, new_offset, offset_cols_to_use, 
    offset_dates_to_use, offset_names_to_use, offset_vals_use)
-rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
-   all_offset_names, all_offsets, checks, depth_cols)
+rm(ts_cols, all_cols, all_offset_cols, all_offset_dates,
+   all_offset_names, all_offsets, checks)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # XXXVIII) Site: 5a_598 -------------------------------------------------------
@@ -4156,9 +4041,7 @@ print(status$Notes)
 data_full <- calc_stages_from_offsets(data, pivot_history)
 # Select columns to plot
 all_cols <- colnames(data_full)
-depth_cols <- grep('depth', all_cols, value=TRUE)
-not_to_plot <- c("sensor_depth")
-ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+ts_cols <- grep('depth', all_cols, value=TRUE)
 print(ts_cols)
 
 # Make plots
@@ -4196,23 +4079,23 @@ data_full <- data_full %>%
   mutate(
     offset_version = offset_names_to_use,           
     offset_value   = new_offset,            
-    revised_depth  = sensor_depth - offset_value,
+    well_depth_m  = head_m - offset_value,
     flag           = 0,                      
     notes          = NA_character_
   )
 
 ## ------- D Plot the data with a revised offset -----------------------
 # Run the anomaly remover
-data_full <- anomaly_remover(data_full, 'revised_depth')
+data_full <- anomaly_remover(data_full, 'well_depth_m')
 
 make_site_ts(site_ts=data_full,
-             y_vars=c("original_depth", "revised_depth"),
+             y_vars=c("original_depth_m", "well_depth_m"),
              qaqc)
 
 # Note the bottomed-out depth with flag = 2
 data_full <- data_full %>% 
   mutate(flag = if_else(
-    revised_depth <= -0.475,
+    well_depth_m <= -0.46,
     2,
     flag
   )
@@ -4221,8 +4104,8 @@ data_full <- data_full %>%
 data_out <- data_full %>% 
   select(
     c(
-      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
-      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+      'well_id', 'timestamp', 'head_m', 'original_depth_m', 
+      'depth_avg', 'well_depth_m', 'offset_version', 'offset_value', 'flag', 'notes'
     )
   )
 
@@ -4238,18 +4121,17 @@ output_data <- bind_rows(output_data, data_out)
 
 # Add checks to output
 checks_final <- checks_final %>%
-  mutate("Site_ID" = site) %>% 
+  mutate("well_id" = site) %>% 
   rename(field_check_m = chk_m,
          logger_val_m = logger_date_mean_trimmed)
 output_checks <- bind_rows(output_checks, checks_final)
 
 rm(site, data, qaqc, pivot_history, 
    status, data_full, data_out, checks_final) 
-
 rm(offsets_to_use, new_offset, offset_cols_to_use, 
    offset_dates_to_use, offset_names_to_use, offset_vals_use)
-rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
-   all_offset_names, all_offsets, checks, depth_cols)
+rm(ts_cols, all_cols, all_offset_cols, all_offset_dates,
+   all_offset_names, all_offsets, checks)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # XXXIX Site: 6_20-------------------------------------------------------
@@ -4267,9 +4149,7 @@ print(status$Notes)
 data_full <- calc_stages_from_offsets(data, pivot_history)
 # Select columns to plot
 all_cols <- colnames(data_full)
-depth_cols <- grep('depth', all_cols, value=TRUE)
-not_to_plot <- c("sensor_depth")
-ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+ts_cols <- grep('depth', all_cols, value=TRUE)
 print(ts_cols)
 
 # Make plots
@@ -4290,7 +4170,6 @@ quick_plot_offset2(all_offsets)
 ## ------- C Revise water depth -----------------------------------------
 
 print(all_offsets)
-
 # PICK OFFSET HERE
 ### !!!!!!! offset V1 !!!!!!!!!!!!!!!!!
 offset_names_to_use <- all_offset_names[all_offset_names == "offset_m_3"]
@@ -4307,17 +4186,17 @@ data_full <- data_full %>%
   mutate(
     offset_version = offset_names_to_use,           
     offset_value   = new_offset,            
-    revised_depth  = sensor_depth - offset_value,
+    well_depth_m  = head_m - offset_value,
     flag           = 0,                      
     notes          = NA_character_
   )
 
 ## ------- D Plot the data with a revised offset -----------------------
 # Run the anomaly remover
-data_full <- anomaly_remover(data_full, 'revised_depth')
+data_full <- anomaly_remover(data_full, 'well_depth_m')
 
 make_site_ts(site_ts=data_full,
-             y_vars=c("original_depth", "revised_depth"),
+             y_vars=c("original_depth_m", "well_depth_m"),
              qaqc)
 
 # NOTE: there's no apparent bottom-out for this well flag=2 depth TBD.
@@ -4325,8 +4204,8 @@ make_site_ts(site_ts=data_full,
 data_out <- data_full %>% 
   select(
     c(
-      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
-      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+      'well_id', 'timestamp', 'head_m', 'original_depth_m', 
+      'depth_avg', 'well_depth_m', 'offset_version', 'offset_value', 'flag', 'notes'
     )
   )
 
@@ -4342,18 +4221,17 @@ output_data <- bind_rows(output_data, data_out)
 
 # Add checks to output
 checks_final <- checks_final %>%
-  mutate("Site_ID" = site) %>% 
+  mutate("well_id" = site) %>% 
   rename(field_check_m = chk_m,
          logger_val_m = logger_date_mean_trimmed)
 output_checks <- bind_rows(output_checks, checks_final)
 
 rm(site, data, qaqc, pivot_history, 
    status, data_full, data_out, checks_final) 
-
 rm(offsets_to_use, new_offset, offset_cols_to_use, 
    offset_dates_to_use, offset_names_to_use, offset_vals_use)
-rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
-   all_offset_names, all_offsets, checks, depth_cols)
+rm(ts_cols, all_cols, all_offset_cols, all_offset_dates,
+   all_offset_names, all_offsets, checks)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # XL) Site: 6_300-------------------------------------------------------
@@ -4371,9 +4249,7 @@ print(status$Notes)
 data_full <- calc_stages_from_offsets(data, pivot_history)
 # Select columns to plot
 all_cols <- colnames(data_full)
-depth_cols <- grep('depth', all_cols, value=TRUE)
-not_to_plot <- c("sensor_depth")
-ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+ts_cols <- grep('depth', all_cols, value=TRUE)
 print(ts_cols)
 
 # Make plots
@@ -4396,7 +4272,7 @@ quick_plot_offset2(all_offsets)
 print(all_offsets)
 
 # PICK OFFSET HERE
-### !!!!!!! offset V1 !!!!!!!!!!!!!!!!!
+### !!!!!!! offset V2 !!!!!!!!!!!!!!!!!
 offset_names_to_use <- all_offset_names[all_offset_names == "offset_m_2"]
 offset_dates_to_use <- all_offset_dates[all_offset_dates == "P_G/L_date_2"]
 offset_cols_to_use  <- c(offset_names_to_use, offset_dates_to_use)
@@ -4411,23 +4287,23 @@ data_full <- data_full %>%
   mutate(
     offset_version = offset_names_to_use,           
     offset_value   = new_offset,            
-    revised_depth  = sensor_depth - offset_value,
+    well_depth_m  = head_m - offset_value,
     flag           = 0,                      
     notes          = NA_character_
   )
 
 ## ------- D Plot the data with a revised offset -----------------------
 # Run the anomaly remover
-data_full <- anomaly_remover(data_full, 'revised_depth')
+data_full <- anomaly_remover(data_full, 'well_depth_m')
 
 make_site_ts(site_ts=data_full,
-             y_vars=c("original_depth", "revised_depth"),
+             y_vars=c("original_depth_m", "well_depth_m"),
              qaqc)
 
 # Note the bottom-out depth with flag = 2
 data_full <- data_full %>% 
   mutate(flag = if_else(
-    revised_depth <= -0.825,
+    well_depth_m <= -0.83,
     2,
     flag
   )
@@ -4436,8 +4312,8 @@ data_full <- data_full %>%
 data_out <- data_full %>% 
   select(
     c(
-      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
-      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+      'well_id', 'timestamp', 'head_m', 'original_depth_m', 
+      'depth_avg', 'well_depth_m', 'offset_version', 'offset_value', 'flag', 'notes'
     )
   )
 
@@ -4453,18 +4329,17 @@ output_data <- bind_rows(output_data, data_out)
 
 # Add checks to output
 checks_final <- checks_final %>%
-  mutate("Site_ID" = site) %>% 
+  mutate("well_id" = site) %>% 
   rename(field_check_m = chk_m,
          logger_val_m = logger_date_mean_trimmed)
 output_checks <- bind_rows(output_checks, checks_final)
 
 rm(site, data, qaqc, pivot_history, 
    status, data_full, data_out, checks_final) 
-
 rm(offsets_to_use, new_offset, offset_cols_to_use, 
    offset_dates_to_use, offset_names_to_use, offset_vals_use)
-rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
-   all_offset_names, all_offsets, checks, depth_cols)
+rm(ts_cols, all_cols, all_offset_cols, all_offset_dates,
+   all_offset_names, all_offsets, checks)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # XLI Site: 6_629-------------------------------------------------------
@@ -4482,9 +4357,7 @@ print(status$Notes)
 data_full <- calc_stages_from_offsets(data, pivot_history)
 # Select columns to plot
 all_cols <- colnames(data_full)
-depth_cols <- grep('depth', all_cols, value=TRUE)
-not_to_plot <- c("sensor_depth")
-ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+ts_cols <- grep('depth', all_cols, value=TRUE)
 print(ts_cols)
 
 # Make plots
@@ -4507,7 +4380,7 @@ quick_plot_offset2(all_offsets)
 print(all_offsets)
 
 # PICK OFFSET HERE
-### !!!!!!! offset V1 !!!!!!!!!!!!!!!!!
+### !!!!!!! offset V2 !!!!!!!!!!!!!!!!!
 offset_names_to_use <- all_offset_names[all_offset_names == "offset_m_2"]
 offset_dates_to_use <- all_offset_dates[all_offset_dates == "P_G/L_date_2"]
 offset_cols_to_use  <- c(offset_names_to_use, offset_dates_to_use)
@@ -4522,23 +4395,23 @@ data_full <- data_full %>%
   mutate(
     offset_version = offset_names_to_use,           
     offset_value   = new_offset,            
-    revised_depth  = sensor_depth - offset_value,
+    well_depth_m  = head_m - offset_value,
     flag           = 0,                      
     notes          = NA_character_
   )
 
 ## ------- D Plot the data with a revised offset -----------------------
 # Run the anomaly remover
-data_full <- anomaly_remover(data_full, 'revised_depth')
+data_full <- anomaly_remover(data_full, 'well_depth_m')
 
 make_site_ts(site_ts=data_full,
-             y_vars=c("original_depth", "revised_depth"),
+             y_vars=c("original_depth_m", "well_depth_m"),
              qaqc)
 
 # Mark bottomed out data with flag = 2
 data_full <- data_full %>% 
   mutate(flag = if_else(
-    revised_depth <= -1.185,
+    well_depth_m <= -1.19,
     2,
     flag
   )
@@ -4547,8 +4420,8 @@ data_full <- data_full %>%
 data_out <- data_full %>% 
   select(
     c(
-      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
-      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+      'well_id', 'timestamp', 'head_m', 'original_depth_m', 
+      'depth_avg', 'well_depth_m', 'offset_version', 'offset_value', 'flag', 'notes'
     )
   )
 
@@ -4564,18 +4437,17 @@ output_data <- bind_rows(output_data, data_out)
 
 # Add checks to output
 checks_final <- checks_final %>%
-  mutate("Site_ID" = site) %>% 
+  mutate("well_id" = site) %>% 
   rename(field_check_m = chk_m,
          logger_val_m = logger_date_mean_trimmed)
 output_checks <- bind_rows(output_checks, checks_final)
 
 rm(site, data, qaqc, pivot_history, 
    status, data_full, data_out, checks_final) 
-
 rm(offsets_to_use, new_offset, offset_cols_to_use, 
    offset_dates_to_use, offset_names_to_use, offset_vals_use)
-rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
-   all_offset_names, all_offsets, checks, depth_cols)
+rm(ts_cols, all_cols, all_offset_cols, all_offset_dates,
+   all_offset_names, all_offsets, checks)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # XLII) Site: 6_93-------------------------------------------------------
@@ -4593,9 +4465,7 @@ print(status$Notes)
 data_full <- calc_stages_from_offsets(data, pivot_history)
 # Select columns to plot
 all_cols <- colnames(data_full)
-depth_cols <- grep('depth', all_cols, value=TRUE)
-not_to_plot <- c("sensor_depth")
-ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+ts_cols <- grep('depth', all_cols, value=TRUE)
 print(ts_cols)
 
 # Make plots
@@ -4633,17 +4503,17 @@ data_full <- data_full %>%
   mutate(
     offset_version = offset_names_to_use,           
     offset_value   = new_offset,            
-    revised_depth  = sensor_depth - offset_value,
+    well_depth_m  = head_m - offset_value,
     flag           = 0,                      
     notes          = NA_character_
   )
 
 ## ------- D Plot the data with a revised offset -----------------------
 # Run the anomaly remover
-data_full <- anomaly_remover(data_full, 'revised_depth')
+data_full <- anomaly_remover(data_full, 'well_depth_m')
 
 make_site_ts(site_ts=data_full,
-             y_vars=c("original_depth", "revised_depth"),
+             y_vars=c("original_depth_m", "well_depth_m"),
              qaqc)
 
 # NOTE: bottomed-out data is not clear, flag=2 depth is TBD.
@@ -4651,8 +4521,8 @@ make_site_ts(site_ts=data_full,
 data_out <- data_full %>% 
   select(
     c(
-      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
-      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+      'well_id', 'timestamp', 'head_m', 'original_depth_m', 
+      'depth_avg', 'well_depth_m', 'offset_version', 'offset_value', 'flag', 'notes'
     )
   )
 
@@ -4668,18 +4538,17 @@ output_data <- bind_rows(output_data, data_out)
 
 # Add checks to output
 checks_final <- checks_final %>%
-  mutate("Site_ID" = site) %>% 
+  mutate("well_id" = site) %>% 
   rename(field_check_m = chk_m,
          logger_val_m = logger_date_mean_trimmed)
 output_checks <- bind_rows(output_checks, checks_final)
 
 rm(site, data, qaqc, pivot_history, 
    status, data_full, data_out, checks_final) 
-
 rm(offsets_to_use, new_offset, offset_cols_to_use, 
    offset_dates_to_use, offset_names_to_use, offset_vals_use)
-rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
-   all_offset_names, all_offsets, checks, depth_cols)
+rm(ts_cols, all_cols, all_offset_cols, all_offset_dates,
+   all_offset_names, all_offsets, checks)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # XLIII) Site: 6a_17-------------------------------------------------------
@@ -4697,9 +4566,7 @@ print(status$Notes)
 data_full <- calc_stages_from_offsets(data, pivot_history)
 # Select columns to plot
 all_cols <- colnames(data_full)
-depth_cols <- grep('depth', all_cols, value=TRUE)
-not_to_plot <- c("sensor_depth")
-ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+ts_cols <- grep('depth', all_cols, value=TRUE)
 print(ts_cols)
 
 # Make plots
@@ -4737,17 +4604,17 @@ data_full <- data_full %>%
   mutate(
     offset_version = offset_names_to_use,           
     offset_value   = new_offset,            
-    revised_depth  = sensor_depth - offset_value,
+    well_depth_m  = head_m - offset_value,
     flag           = 0,                      
     notes          = NA_character_
   )
 
 ## ------- D Plot the data with a revised offset -----------------------
 # Run the anomaly remover
-data_full <- anomaly_remover(data_full, 'revised_depth')
+data_full <- anomaly_remover(data_full, 'well_depth_m')
 
 make_site_ts(site_ts=data_full,
-             y_vars=c("original_depth", "revised_depth"),
+             y_vars=c("original_depth_m", "well_depth_m"),
              qaqc)
 
 # NOTE: bottom out (flag=2) depth is still TBD.
@@ -4755,8 +4622,8 @@ make_site_ts(site_ts=data_full,
 data_out <- data_full %>% 
   select(
     c(
-      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
-      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+      'well_id', 'timestamp', 'head_m', 'original_depth_m', 
+      'depth_avg', 'well_depth_m', 'offset_version', 'offset_value', 'flag', 'notes'
     )
   )
 
@@ -4772,18 +4639,17 @@ output_data <- bind_rows(output_data, data_out)
 
 # Add checks to output
 checks_final <- checks_final %>%
-  mutate("Site_ID" = site) %>% 
+  mutate("well_id" = site) %>% 
   rename(field_check_m = chk_m,
          logger_val_m = logger_date_mean_trimmed)
 output_checks <- bind_rows(output_checks, checks_final)
 
 rm(site, data, qaqc, pivot_history, 
    status, data_full, data_out, checks_final) 
-
 rm(offsets_to_use, new_offset, offset_cols_to_use, 
    offset_dates_to_use, offset_names_to_use, offset_vals_use)
-rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
-   all_offset_names, all_offsets, checks, depth_cols)
+rm(ts_cols, all_cols, all_offset_cols, all_offset_dates,
+   all_offset_names, all_offsets, checks)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # XLIV) Site: 6a_530-------------------------------------------------------
@@ -4801,9 +4667,7 @@ print(status$Notes)
 data_full <- calc_stages_from_offsets(data, pivot_history)
 # Select columns to plot
 all_cols <- colnames(data_full)
-depth_cols <- grep('depth', all_cols, value=TRUE)
-not_to_plot <- c("sensor_depth")
-ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+ts_cols <- grep('depth', all_cols, value=TRUE)
 print(ts_cols)
 
 # Make plots
@@ -4841,7 +4705,7 @@ data_full <- data_full %>%
   mutate(
     offset_version = offset_names_to_use,           
     offset_value   = new_offset,            
-    revised_depth  = sensor_depth - offset_value,
+    well_depth_m  = head_m - offset_value,
     flag           = 0,                      
     notes          = NA_character_
   )
@@ -4849,16 +4713,16 @@ data_full <- data_full %>%
 ## ------- D Plot the data with a revised offset -----------------------
 
 # Run the anomaly remover
-data_full <- anomaly_remover(data_full, 'revised_depth')
+data_full <- anomaly_remover(data_full, 'well_depth_m')
 
 make_site_ts(site_ts=data_full,
-             y_vars=c("original_depth", "revised_depth"),
+             y_vars=c("original_depth_m", "well_depth_m"),
              qaqc)
 
 # Flag = 2 for bottomed-out data
 data_full <- data_full %>% 
   mutate(flag = if_else(
-    revised_depth <= -0.68,
+    well_depth_m <= -0.68,
     2,
     flag
   )
@@ -4867,8 +4731,8 @@ data_full <- data_full %>%
 data_out <- data_full %>% 
   select(
     c(
-      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
-      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+      'well_id', 'timestamp', 'head_m', 'original_depth_m', 
+      'depth_avg', 'well_depth_m', 'offset_version', 'offset_value', 'flag', 'notes'
     )
   )
 
@@ -4884,18 +4748,17 @@ output_data <- bind_rows(output_data, data_out)
 
 # Add checks to output
 checks_final <- checks_final %>%
-  mutate("Site_ID" = site) %>% 
+  mutate("well_id" = site) %>% 
   rename(field_check_m = chk_m,
          logger_val_m = logger_date_mean_trimmed)
 output_checks <- bind_rows(output_checks, checks_final)
 
 rm(site, data, qaqc, pivot_history, 
    status, data_full, data_out, checks_final) 
-
 rm(offsets_to_use, new_offset, offset_cols_to_use, 
    offset_dates_to_use, offset_names_to_use, offset_vals_use)
-rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
-   all_offset_names, all_offsets, checks, depth_cols)
+rm(ts_cols, all_cols, all_offset_cols, all_offset_dates,
+   all_offset_names, all_offsets, checks)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # XLV) Site: 7_243-------------------------------------------------------
@@ -4913,9 +4776,7 @@ print(status$Notes)
 data_full <- calc_stages_from_offsets(data, pivot_history)
 # Select columns to plot
 all_cols <- colnames(data_full)
-depth_cols <- grep('depth', all_cols, value=TRUE)
-not_to_plot <- c("sensor_depth")
-ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+ts_cols <- grep('depth', all_cols, value=TRUE)
 print(ts_cols)
 
 # Make plots
@@ -4953,23 +4814,23 @@ data_full <- data_full %>%
   mutate(
     offset_version = offset_names_to_use,           
     offset_value   = new_offset,            
-    revised_depth  = sensor_depth - offset_value,
+    well_depth_m  = head_m - offset_value,
     flag           = 0,                      
     notes          = NA_character_
   )
 
 ## ------- D Plot the data with a revised offset -----------------------
 # Run the anomaly remover
-data_full <- anomaly_remover(data_full, 'revised_depth')
+data_full <- anomaly_remover(data_full, 'well_depth_m')
 
 make_site_ts(site_ts=data_full,
-             y_vars=c("original_depth", "revised_depth"),
+             y_vars=c("original_depth_m", "well_depth_m"),
              qaqc)
 
 # Mark the bottom-out data with flag = 2
 data_full <- data_full %>% 
   mutate(flag = if_else(
-    revised_depth <= -0.74,
+    well_depth_m <= -0.74,
     2,
     flag
   )
@@ -4978,8 +4839,8 @@ data_full <- data_full %>%
 data_out <- data_full %>% 
   select(
     c(
-      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
-      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+      'well_id', 'timestamp', 'head_m', 'original_depth_m', 
+      'depth_avg', 'well_depth_m', 'offset_version', 'offset_value', 'flag', 'notes'
     )
   )
 
@@ -4995,18 +4856,17 @@ output_data <- bind_rows(output_data, data_out)
 
 # Add checks to output
 checks_final <- checks_final %>%
-  mutate("Site_ID" = site) %>% 
+  mutate("well_id" = site) %>% 
   rename(field_check_m = chk_m,
          logger_val_m = logger_date_mean_trimmed)
 output_checks <- bind_rows(output_checks, checks_final)
 
 rm(site, data, qaqc, pivot_history, 
    status, data_full, data_out, checks_final) 
-
 rm(offsets_to_use, new_offset, offset_cols_to_use, 
    offset_dates_to_use, offset_names_to_use, offset_vals_use)
-rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
-   all_offset_names, all_offsets, checks, depth_cols)
+rm(ts_cols, all_cols, all_offset_cols, all_offset_dates,
+   all_offset_names, all_offsets, checks)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # XLVI) Site: 7_341-------------------------------------------------------
@@ -5024,9 +4884,7 @@ print(status$Notes)
 data_full <- calc_stages_from_offsets(data, pivot_history)
 # Select columns to plot
 all_cols <- colnames(data_full)
-depth_cols <- grep('depth', all_cols, value=TRUE)
-not_to_plot <- c("sensor_depth")
-ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+ts_cols <- grep('depth', all_cols, value=TRUE)
 print(ts_cols)
 
 # Make plots
@@ -5064,7 +4922,7 @@ data_full <- data_full %>%
   mutate(
     offset_version = offset_names_to_use,           
     offset_value   = new_offset,            
-    revised_depth  = sensor_depth - offset_value,
+    well_depth_m  = head_m - offset_value,
     flag           = 0,                      
     notes          = NA_character_
   )
@@ -5072,10 +4930,10 @@ data_full <- data_full %>%
 ## ------- D Plot the data with a revised offset -----------------------
 
 # Run the anomaly remover
-data_full <- anomaly_remover(data_full, 'revised_depth')
+data_full <- anomaly_remover(data_full, 'well_depth_m')
 
 make_site_ts(site_ts=data_full,
-             y_vars=c("original_depth", "revised_depth"),
+             y_vars=c("original_depth_m", "well_depth_m"),
              qaqc)
 
 # NOTE there is not a clear bottom-out depth for flag = 2, TBD
@@ -5083,8 +4941,8 @@ make_site_ts(site_ts=data_full,
 data_out <- data_full %>% 
   select(
     c(
-      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
-      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+      'well_id', 'timestamp', 'head_m', 'original_depth_m', 
+      'depth_avg', 'well_depth_m', 'offset_version', 'offset_value', 'flag', 'notes'
     )
   )
 
@@ -5100,18 +4958,17 @@ output_data <- bind_rows(output_data, data_out)
 
 # Add checks to output
 checks_final <- checks_final %>%
-  mutate("Site_ID" = site) %>% 
+  mutate("well_id" = site) %>% 
   rename(field_check_m = chk_m,
          logger_val_m = logger_date_mean_trimmed)
 output_checks <- bind_rows(output_checks, checks_final)
 
 rm(site, data, qaqc, pivot_history, 
    status, data_full, data_out, checks_final) 
-
 rm(offsets_to_use, new_offset, offset_cols_to_use, 
    offset_dates_to_use, offset_names_to_use, offset_vals_use)
-rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
-   all_offset_names, all_offsets, checks, depth_cols)
+rm(ts_cols, all_cols, all_offset_cols, all_offset_dates,
+   all_offset_names, all_offsets, checks)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # XLVII) Site: 7_622-------------------------------------------------------
@@ -5129,9 +4986,7 @@ print(status$Notes)
 data_full <- calc_stages_from_offsets(data, pivot_history)
 # Select columns to plot
 all_cols <- colnames(data_full)
-depth_cols <- grep('depth', all_cols, value=TRUE)
-not_to_plot <- c("sensor_depth")
-ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+ts_cols <- grep('depth', all_cols, value=TRUE)
 print(ts_cols)
 
 # Make plots
@@ -5169,23 +5024,23 @@ data_full <- data_full %>%
   mutate(
     offset_version = offset_names_to_use,           
     offset_value   = new_offset,            
-    revised_depth  = sensor_depth - offset_value,
+    well_depth_m  = head_m - offset_value,
     flag           = 0,                      
     notes          = NA_character_
   )
 
 ## ------- D Plot the data with a revised offset -----------------------
 # run the anomaly remover
-data_full <- anomaly_remover(data_full, 'revised_depth')
+data_full <- anomaly_remover(data_full, 'well_depth_m')
 
 make_site_ts(site_ts=data_full,
-             y_vars=c("original_depth", "revised_depth"),
+             y_vars=c("original_depth_m", "well_depth_m"),
              qaqc)
 
 # Flag =2 for bottomed out data
 data_full <- data_full %>% 
   mutate(flag = if_else(
-    revised_depth <= -0.31,
+    well_depth_m <= -0.305,
     2,
     flag
   )
@@ -5194,8 +5049,8 @@ data_full <- data_full %>%
 data_out <- data_full %>% 
   select(
     c(
-      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
-      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+      'well_id', 'timestamp', 'head_m', 'original_depth_m', 
+      'depth_avg', 'well_depth_m', 'offset_version', 'offset_value', 'flag', 'notes'
     )
   )
 
@@ -5211,18 +5066,17 @@ output_data <- bind_rows(output_data, data_out)
 
 # Add checks to output
 checks_final <- checks_final %>%
-  mutate("Site_ID" = site) %>% 
+  mutate("well_id" = site) %>% 
   rename(field_check_m = chk_m,
          logger_val_m = logger_date_mean_trimmed)
 output_checks <- bind_rows(output_checks, checks_final)
 
 rm(site, data, qaqc, pivot_history, 
    status, data_full, data_out, checks_final) 
-
 rm(offsets_to_use, new_offset, offset_cols_to_use, 
    offset_dates_to_use, offset_names_to_use, offset_vals_use)
-rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
-   all_offset_names, all_offsets, checks, depth_cols)
+rm(ts_cols, all_cols, all_offset_cols, all_offset_dates,
+   all_offset_names, all_offsets, checks)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # XLVIII) Site: 7_626-------------------------------------------------------
@@ -5236,14 +5090,11 @@ pivot_history <- fetch_pivot_history(meta_data_path, site)
 status <- fetch_post_process_status(status_path, site)
 print(status$Notes)
 
-
 ## ------ B Explore depth versions -------------------------
 data_full <- calc_stages_from_offsets(data, pivot_history)
 # Select columns to plot
 all_cols <- colnames(data_full)
-depth_cols <- grep('depth', all_cols, value=TRUE)
-not_to_plot <- c("sensor_depth")
-ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+ts_cols <- grep('depth', all_cols, value=TRUE)
 print(ts_cols)
 
 # Make plots
@@ -5281,23 +5132,23 @@ data_full <- data_full %>%
   mutate(
     offset_version = offset_names_to_use,           
     offset_value   = new_offset,            
-    revised_depth  = sensor_depth - offset_value,
+    well_depth_m  = head_m - offset_value,
     flag           = 0,                      
     notes          = NA_character_
   )
 
 ## ------- D Plot the data with a revised offset -----------------------
 # Run the anomaly remover
-data_full <- anomaly_remover(data_full, 'revised_depth')
+data_full <- anomaly_remover(data_full, 'well_depth_m')
 
 make_site_ts(site_ts=data_full,
-             y_vars=c("original_depth", "revised_depth"),
+             y_vars=c("original_depth_m", "well_depth_m"),
              qaqc)
 
 # Note the bottomed-out data with flag = 2
 data_full <- data_full %>% 
   mutate(flag = if_else(
-    revised_depth <= -0.52,
+    well_depth_m <= -0.53,
     2,
     flag
   )
@@ -5306,8 +5157,8 @@ data_full <- data_full %>%
 data_out <- data_full %>% 
   select(
     c(
-      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
-      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+      'well_id', 'timestamp', 'head_m', 'original_depth_m', 
+      'depth_avg', 'well_depth_m', 'offset_version', 'offset_value', 'flag', 'notes'
     )
   )
 
@@ -5323,18 +5174,17 @@ output_data <- bind_rows(output_data, data_out)
 
 # Add checks to output
 checks_final <- checks_final %>%
-  mutate("Site_ID" = site) %>% 
+  mutate("well_id" = site) %>% 
   rename(field_check_m = chk_m,
          logger_val_m = logger_date_mean_trimmed)
 output_checks <- bind_rows(output_checks, checks_final)
 
 rm(site, data, qaqc, pivot_history, 
    status, data_full, data_out, checks_final) 
-
 rm(offsets_to_use, new_offset, offset_cols_to_use, 
    offset_dates_to_use, offset_names_to_use, offset_vals_use)
-rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
-   all_offset_names, all_offsets, checks, depth_cols)
+rm(ts_cols, all_cols, all_offset_cols, all_offset_dates,
+   all_offset_names, all_offsets, checks)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # XLIX) Site: 9_332-------------------------------------------------------
@@ -5352,9 +5202,7 @@ print(status$Notes)
 data_full <- calc_stages_from_offsets(data, pivot_history)
 # Select columns to plot
 all_cols <- colnames(data_full)
-depth_cols <- grep('depth', all_cols, value=TRUE)
-not_to_plot <- c("sensor_depth")
-ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+ts_cols <- grep('depth', all_cols, value=TRUE)
 print(ts_cols)
 
 # Make plots
@@ -5404,28 +5252,28 @@ data_full <- data_full %>%
   mutate(
     # 1) Set which offset version applies to each date
     offset_version = case_when(
-      Date < as.Date("2023-08-06") ~ offset_names_to_use1,
-      Date > as.Date("2023-08-10") & Date < as.Date("2023-11-10") ~ offset_names_to_use2,
-      Date > as.Date("2023-11-10") & Date < as.Date("2024-04-24") ~ offset_names_to_use3,
-      Date > as.Date("2024-04-24") ~ offset_names_to_use4,
+      timestamp < as.POSIXct("2023-08-06") ~ offset_names_to_use1,
+      timestamp > as.POSIXct("2023-08-10") & timestamp < as.POSIXct("2023-11-10") ~ offset_names_to_use2,
+      timestamp > as.POSIXct("2023-11-10") & timestamp < as.POSIXct("2024-04-24") ~ offset_names_to_use3,
+      timestamp > as.POSIXct("2024-04-24") ~ offset_names_to_use4,
       TRUE ~ NA_character_
     ),
     
     # 2) The numerical offset value for each date
     offset_value = case_when(
-      Date < as.Date("2023-08-06") ~ new_offset1,
-      Date > as.Date("2023-08-10") & Date < as.Date("2023-11-10") ~ new_offset2,
-      Date > as.Date("2023-11-10") & Date < as.Date("2024-04-24") ~ new_offset3,
-      Date > as.Date("2024-04-24") ~ new_offset4,
+      timestamp < as.POSIXct("2023-08-06") ~ new_offset1,
+      timestamp > as.POSIXct("2023-08-10") & timestamp < as.POSIXct("2023-11-10") ~ new_offset2,
+      timestamp > as.POSIXct("2023-11-10") & timestamp < as.POSIXct("2024-04-24") ~ new_offset3,
+      timestamp > as.POSIXct("2024-04-24") ~ new_offset4,
       TRUE ~ NA_real_
     ),
     
     # 3) (Optional) Define flags or notes similarly
     flag = case_when(
-      Date < as.Date("2023-08-06") ~ 0,
-      Date >= as.Date("2023-08-10") & Date < as.Date("2023-11-10") ~ 1,
-      Date >= as.Date("2023-11-10") & Date < as.Date("2024-04-24") ~ 1,
-      Date >= as.Date("2024-04-24") ~ 0,
+      timestamp < as.POSIXct("2023-08-06") ~ 0,
+      timestamp >= as.POSIXct("2023-08-10") & timestamp < as.POSIXct("2023-11-10") ~ 1,
+      timestamp >= as.POSIXct("2023-11-10") & timestamp < as.POSIXct("2024-04-24") ~ 1,
+      timestamp >= as.POSIXct("2024-04-24") ~ 0,
       TRUE ~ NA_real_
     ),
     notes = case_when(
@@ -5436,9 +5284,9 @@ data_full <- data_full %>%
       TRUE ~ NA_character_
     ),
     
-    # 4) Calculate revised_depth by subtracting the offset from sensor_depth
-    revised_depth = case_when(
-      !is.na(offset_value) ~ sensor_depth - offset_value,
+    # 4) Calculate well_depth by subtracting the offset from sensor's head
+    well_depth_m = case_when(
+      !is.na(offset_value) ~ head_m - offset_value,
       TRUE ~ NA_real_
     )
   ) %>% 
@@ -5446,26 +5294,26 @@ data_full <- data_full %>%
 
 ## ------- D Plot the data with a revised offset -----------------------
 # Run the anomaly remover
-data_full <- anomaly_remover(data_full, 'revised_depth')
+data_full <- anomaly_remover(data_full, 'well_depth_m')
 
 make_site_ts(site_ts=data_full,
-             y_vars=c("original_depth", "revised_depth"),
+             y_vars=c("original_depth_m", "well_depth_m"),
              qaqc)
 
-# Note the bottomed-out depths with flag = 2
-data_full <- data_full %>%
-  mutate(flag = if_else(
-    (Date < as.Date("2023-08-06") & revised_depth <= -0.51) |
-      (Date > as.Date("2024-04-24") & revised_depth <= -0.82),
-    2,
-    flag
-  ))
+data_full <- data_full %>% 
+  mutate(
+    flag = case_when(
+      well_depth_m <= -0.51 & timestamp < as.POSIXct("2023-08-06") ~ 2,
+      well_depth_m <= -0.82 & timestamp > as.POSIXct("2024-04-24") ~ 2,
+      TRUE ~ flag
+    )
+  )
 
 data_out <- data_full %>% 
   select(
     c(
-      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
-      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+      'well_id', 'timestamp', 'head_m', 'original_depth_m', 
+      'depth_avg', 'well_depth_m', 'offset_version', 'offset_value', 'flag', 'notes'
     )
   )
 
@@ -5481,20 +5329,20 @@ output_data <- bind_rows(output_data, data_out)
 
 # Add checks to output
 checks_final <- checks_final %>%
-  mutate("Site_ID" = site) %>% 
+  mutate("well_id" = site) %>% 
   rename(field_check_m = chk_m,
          logger_val_m = logger_date_mean_trimmed)
 output_checks <- bind_rows(output_checks, checks_final)
 
 rm(site, data, qaqc, pivot_history, 
    status, data_full, data_out, checks_final) 
-
 rm(offsets_to_use1, new_offset1, new_offset2,
    offset_cols_to_use1, offset_dates_to_use1,
    offset_names_to_use1, offset_names_to_use2,
-   offset_vals_use1)
-rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
-   all_offset_names, all_offsets, checks, depth_cols)
+   offset_vals_use1, new_offset3, new_offset4,
+   offset_names_to_use3, offset_names_to_use4)
+rm(ts_cols, all_cols, all_offset_cols, all_offset_dates,
+   all_offset_names, all_offsets, checks)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # L) Site: 9_439-------------------------------------------------------
@@ -5513,9 +5361,7 @@ print(status$Notes)
 data_full <- calc_stages_from_offsets(data, pivot_history)
 # Select columns to plot
 all_cols <- colnames(data_full)
-depth_cols <- grep('depth', all_cols, value=TRUE)
-not_to_plot <- c("sensor_depth")
-ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+ts_cols <- grep('depth', all_cols, value=TRUE)
 print(ts_cols)
 
 # Make plots
@@ -5553,23 +5399,23 @@ data_full <- data_full %>%
   mutate(
     offset_version = offset_names_to_use,           
     offset_value   = new_offset,            
-    revised_depth  = sensor_depth - offset_value,
+    well_depth_m  = head_m - offset_value,
     flag           = 0,                      
     notes          = NA_character_
   )
 
 ## ------- D Plot the data with a revised offset -----------------------
 # Run the anomaly remover
-data_full <- anomaly_remover(data_full, 'revised_depth')
+data_full <- anomaly_remover(data_full, 'well_depth_m')
 
 make_site_ts(site_ts=data_full,
-             y_vars=c("original_depth", "revised_depth"),
+             y_vars=c("original_depth_m", "well_depth_m"),
              qaqc)
 
 # Flag = 2 for bottomed out data
 data_full <- data_full %>% 
   mutate(flag = if_else(
-    revised_depth <= -0.655,
+    well_depth_m <= -0.64,
     2,
     flag
   )
@@ -5578,8 +5424,8 @@ data_full <- data_full %>%
 data_out <- data_full %>% 
   select(
     c(
-      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
-      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+      'well_id', 'timestamp', 'head_m', 'original_depth_m', 
+      'depth_avg', 'well_depth_m', 'offset_version', 'offset_value', 'flag', 'notes'
     )
   )
 
@@ -5595,18 +5441,17 @@ output_data <- bind_rows(output_data, data_out)
 
 # Add checks to output
 checks_final <- checks_final %>%
-  mutate("Site_ID" = site) %>% 
+  mutate("well_id" = site) %>% 
   rename(field_check_m = chk_m,
          logger_val_m = logger_date_mean_trimmed)
 output_checks <- bind_rows(output_checks, checks_final)
 
 rm(site, data, qaqc, pivot_history, 
    status, data_full, data_out, checks_final) 
-
 rm(offsets_to_use, new_offset, offset_cols_to_use, 
    offset_dates_to_use, offset_names_to_use, offset_vals_use)
-rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
-   all_offset_names, all_offsets, checks, depth_cols)
+rm(ts_cols, all_cols, all_offset_cols, all_offset_dates,
+   all_offset_names, all_offsets, checks)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # LI) Site: 9_508-------------------------------------------------------
@@ -5620,14 +5465,11 @@ pivot_history <- fetch_pivot_history(meta_data_path, site)
 status <- fetch_post_process_status(status_path, site)
 print(status$Notes)
 
-
 ## ------ B Explore depth versions -------------------------
 data_full <- calc_stages_from_offsets(data, pivot_history)
 # Select columns to plot
 all_cols <- colnames(data_full)
-depth_cols <- grep('depth', all_cols, value=TRUE)
-not_to_plot <- c("sensor_depth")
-ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+ts_cols <- grep('depth', all_cols, value=TRUE)
 print(ts_cols)
 
 # Make plots
@@ -5665,23 +5507,23 @@ data_full <- data_full %>%
   mutate(
     offset_version = offset_names_to_use,           
     offset_value   = new_offset,            
-    revised_depth  = sensor_depth - offset_value,
+    well_depth_m  = head_m - offset_value,
     flag           = 0,                      
     notes          = NA_character_
   )
 
 ## ------- D Plot the data with a revised offset -----------------------
 # run anomaly remover 
-data_full <- anomaly_remover(data_full, 'revised_depth')
+data_full <- anomaly_remover(data_full, 'well_depth_m')
 
 make_site_ts(site_ts=data_full,
-             y_vars=c("original_depth", "revised_depth"),
+             y_vars=c("original_depth_m", "well_depth_m"),
              qaqc)
 
 # Flag bottomed out data = 2
 data_full <- data_full %>% 
   mutate(flag = if_else(
-    revised_depth <= -0.815,
+    well_depth_m <= -0.78,
     2,
     flag
   )
@@ -5690,8 +5532,8 @@ data_full <- data_full %>%
 data_out <- data_full %>% 
   select(
     c(
-      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
-      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+      'well_id', 'timestamp', 'head_m', 'original_depth_m', 
+      'depth_avg', 'well_depth_m', 'offset_version', 'offset_value', 'flag', 'notes'
     )
   )
 
@@ -5707,18 +5549,17 @@ output_data <- bind_rows(output_data, data_out)
 
 # Add checks to output
 checks_final <- checks_final %>%
-  mutate("Site_ID" = site) %>% 
+  mutate("well_id" = site) %>% 
   rename(field_check_m = chk_m,
          logger_val_m = logger_date_mean_trimmed)
 output_checks <- bind_rows(output_checks, checks_final)
 
 rm(site, data, qaqc, pivot_history, 
    status, data_full, data_out, checks_final) 
-
 rm(offsets_to_use, new_offset, offset_cols_to_use, 
    offset_dates_to_use, offset_names_to_use, offset_vals_use)
-rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
-   all_offset_names, all_offsets, checks, depth_cols)
+rm(ts_cols, all_cols, all_offset_cols, all_offset_dates,
+   all_offset_names, all_offsets, checks)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # LII) Site: 9_609-------------------------------------------------------
@@ -5732,14 +5573,11 @@ pivot_history <- fetch_pivot_history(meta_data_path, site)
 status <- fetch_post_process_status(status_path, site)
 print(status$Notes)
 
-
 ## ------ B Explore depth versions -------------------------
 data_full <- calc_stages_from_offsets(data, pivot_history)
 # Select columns to plot
 all_cols <- colnames(data_full)
-depth_cols <- grep('depth', all_cols, value=TRUE)
-not_to_plot <- c("sensor_depth")
-ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+ts_cols <- grep('depth', all_cols, value=TRUE)
 print(ts_cols)
 
 # Make plots
@@ -5777,23 +5615,23 @@ data_full <- data_full %>%
   mutate(
     offset_version = offset_names_to_use,           
     offset_value   = new_offset,            
-    revised_depth  = sensor_depth - offset_value,
+    well_depth_m  = head_m - offset_value,
     flag           = 0,                      
     notes          = NA_character_
   )
 
 ## ------- D Plot the data with a revised offset -----------------------
 # Run the anomaly remover
-data_full <- anomaly_remover(data_full, 'revised_depth')
+data_full <- anomaly_remover(data_full, 'well_depth_m')
 
 make_site_ts(site_ts=data_full,
-             y_vars=c("original_depth", "revised_depth"),
+             y_vars=c("original_depth_m", "well_depth_m"),
              qaqc)
 
 # Flag = 2 for bottomed out data
 data_full <- data_full %>% 
   mutate(flag = if_else(
-    revised_depth <= -0.825,
+    well_depth_m <= -0.81,
     2,
     flag
   )
@@ -5802,8 +5640,8 @@ data_full <- data_full %>%
 data_out <- data_full %>% 
   select(
     c(
-      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
-      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+      'well_id', 'timestamp', 'head_m', 'original_depth_m', 
+      'depth_avg', 'well_depth_m', 'offset_version', 'offset_value', 'flag', 'notes'
     )
   )
 
@@ -5819,18 +5657,17 @@ output_data <- bind_rows(output_data, data_out)
 
 # Add checks to output
 checks_final <- checks_final %>%
-  mutate("Site_ID" = site) %>% 
+  mutate("well_id" = site) %>% 
   rename(field_check_m = chk_m,
          logger_val_m = logger_date_mean_trimmed)
 output_checks <- bind_rows(output_checks, checks_final)
 
 rm(site, data, qaqc, pivot_history, 
    status, data_full, data_out, checks_final) 
-
 rm(offsets_to_use, new_offset, offset_cols_to_use, 
    offset_dates_to_use, offset_names_to_use, offset_vals_use)
-rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
-   all_offset_names, all_offsets, checks, depth_cols)
+rm(ts_cols, all_cols, all_offset_cols, all_offset_dates,
+   all_offset_names, all_offsets, checks)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # LIII) Site: 9_77-------------------------------------------------------
@@ -5848,9 +5685,7 @@ print(status$Notes)
 data_full <- calc_stages_from_offsets(data, pivot_history)
 # Select columns to plot
 all_cols <- colnames(data_full)
-depth_cols <- grep('depth', all_cols, value=TRUE)
-not_to_plot <- c("sensor_depth")
-ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+ts_cols <- grep('depth', all_cols, value=TRUE)
 print(ts_cols)
 
 # Make plots
@@ -5888,7 +5723,7 @@ data_full <- data_full %>%
   mutate(
     offset_version = offset_names_to_use,           
     offset_value   = new_offset,            
-    revised_depth  = sensor_depth - offset_value,
+    well_depth_m  = head_m - offset_value,
     flag           = 0,                      
     notes          = NA_character_
   )
@@ -5896,16 +5731,16 @@ data_full <- data_full %>%
 ## ------- D Plot the data with a revised offset -----------------------
 
 # run the anomaly remover
-data_full <- anomaly_remover(data_full, 'revised_depth')
+data_full <- anomaly_remover(data_full, 'well_depth_m')
 
 make_site_ts(site_ts=data_full,
-             y_vars=c("original_depth", "revised_depth"),
+             y_vars=c("original_depth_m", "well_depth_m"),
              qaqc)
 
 # Flag = 2 for bottomed out data
 data_full <- data_full %>% 
   mutate(flag = if_else(
-    revised_depth <= -0.535,
+    well_depth_m <= -0.525,
     2,
     flag
   )
@@ -5914,8 +5749,8 @@ data_full <- data_full %>%
 data_out <- data_full %>% 
   select(
     c(
-      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
-      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+      'well_id', 'timestamp', 'head_m', 'original_depth_m', 
+      'depth_avg', 'well_depth_m', 'offset_version', 'offset_value', 'flag', 'notes'
     )
   )
 
@@ -5931,18 +5766,17 @@ output_data <- bind_rows(output_data, data_out)
 
 # Add checks to output
 checks_final <- checks_final %>%
-  mutate("Site_ID" = site) %>% 
+  mutate("well_id" = site) %>% 
   rename(field_check_m = chk_m,
          logger_val_m = logger_date_mean_trimmed)
 output_checks <- bind_rows(output_checks, checks_final)
 
 rm(site, data, qaqc, pivot_history, 
    status, data_full, data_out, checks_final) 
-
 rm(offsets_to_use, new_offset, offset_cols_to_use, 
    offset_dates_to_use, offset_names_to_use, offset_vals_use)
-rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
-   all_offset_names, all_offsets, checks, depth_cols)
+rm(ts_cols, all_cols, all_offset_cols, all_offset_dates,
+   all_offset_names, all_offsets, checks)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # LIV) Site: Sunita Wetland Wet East -------------------------------------------------------
@@ -5958,9 +5792,7 @@ pivot_history <- fetch_pivot_history(meta_data_path, site)
 data_full <- calc_stages_from_offsets(data, pivot_history)
 # Select columns to plot
 all_cols <- colnames(data_full)
-depth_cols <- grep('depth', all_cols, value=TRUE)
-not_to_plot <- c("sensor_depth")
-ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+ts_cols <- grep('depth', all_cols, value=TRUE)
 print(ts_cols)
 
 # Make plots
@@ -5998,7 +5830,7 @@ data_full <- data_full %>%
   mutate(
     offset_version = offset_names_to_use,           
     offset_value   = new_offset,            
-    revised_depth  = sensor_depth - offset_value,
+    well_depth_m = head_m - offset_value,
     flag           = 0,                      
     notes          = NA_character_
   )
@@ -6006,26 +5838,26 @@ data_full <- data_full %>%
 ## ------- D Plot the data with a revised offset -----------------------
 
 # run the anomaly remover
-data_full <- anomaly_remover(data_full, 'revised_depth')
+data_full <- anomaly_remover(data_full, 'well_depth_m')
 
 make_site_ts(site_ts=data_full,
-             y_vars=c("original_depth", "revised_depth"),
+             y_vars=c("original_depth_m", "well_depth_m"),
              qaqc)
 
 # Flag = 2 for bottomed out data
 data_full <- data_full %>% 
   mutate(flag = if_else(
-    revised_depth <= -0.68,
+    well_depth_m <= -0.675,
     2,
     flag
   )
-  )
+)
 
 data_out <- data_full %>% 
   select(
     c(
-      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
-      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+      'well_id', 'timestamp', 'head_m', 'original_depth_m', 
+      'depth_avg', 'well_depth_m', 'offset_version', 'offset_value', 'flag', 'notes'
     )
   )
 
@@ -6041,18 +5873,17 @@ output_data <- bind_rows(output_data, data_out)
 
 # Add checks to output
 checks_final <- checks_final %>%
-  mutate("Site_ID" = site) %>% 
+  mutate("well_id" = site) %>% 
   rename(field_check_m = chk_m,
          logger_val_m = logger_date_mean_trimmed)
 output_checks <- bind_rows(output_checks, checks_final)
 
 rm(site, data, qaqc, pivot_history, 
    status, data_full, data_out, checks_final) 
-
 rm(offsets_to_use, new_offset, offset_cols_to_use, 
    offset_dates_to_use, offset_names_to_use, offset_vals_use)
-rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
-   all_offset_names, all_offsets, checks, depth_cols)
+rm(ts_cols, all_cols, all_offset_cols, all_offset_dates,
+   all_offset_names, all_offsets, checks)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # LV) Site: Sunita Wetland Dry West -------------------------------------------------------
@@ -6068,9 +5899,7 @@ pivot_history <- fetch_pivot_history(meta_data_path, site)
 data_full <- calc_stages_from_offsets(data, pivot_history)
 # Select columns to plot
 all_cols <- colnames(data_full)
-depth_cols <- grep('depth', all_cols, value=TRUE)
-not_to_plot <- c("sensor_depth")
-ts_cols <- depth_cols[!depth_cols %in% not_to_plot]
+ts_cols <- grep('depth', all_cols, value=TRUE)
 print(ts_cols)
 
 # Make plots
@@ -6108,7 +5937,7 @@ data_full <- data_full %>%
   mutate(
     offset_version = offset_names_to_use,           
     offset_value   = new_offset,            
-    revised_depth  = sensor_depth - offset_value,
+    well_depth_m  = head_m - offset_value,
     flag           = 0,                      
     notes          = NA_character_
   )
@@ -6116,26 +5945,26 @@ data_full <- data_full %>%
 ## ------- D Plot the data with a revised offset -----------------------
 
 # run the anomaly remover
-data_full <- anomaly_remover(data_full, 'revised_depth')
+data_full <- anomaly_remover(data_full, 'well_depth_m')
 
 make_site_ts(site_ts=data_full,
-             y_vars=c("original_depth", "revised_depth"),
+             y_vars=c("original_depth_m", "well_depth_m"),
              qaqc)
 
 # Flag = 2 for bottomed out data
 data_full <- data_full %>% 
   mutate(flag = if_else(
-    revised_depth <= -0.68,
+    well_depth_m <= -0.67,
     2,
     flag
   )
-  )
+)
 
 data_out <- data_full %>% 
   select(
     c(
-      'Site_ID', 'Date', 'sensor_depth', 'original_depth', 
-      'depth_avg', 'revised_depth', 'offset_version', 'offset_value', 'flag', 'notes'
+      'well_id', 'timestamp', 'head_m', 'original_depth_m', 
+      'depth_avg', 'well_depth_m', 'offset_version', 'offset_value', 'flag', 'notes'
     )
   )
 
@@ -6151,72 +5980,66 @@ output_data <- bind_rows(output_data, data_out)
 
 # Add checks to output
 checks_final <- checks_final %>%
-  mutate("Site_ID" = site) %>% 
+  mutate("well_id" = site) %>% 
   rename(field_check_m = chk_m,
          logger_val_m = logger_date_mean_trimmed)
 output_checks <- bind_rows(output_checks, checks_final)
 
-rm(site, data, qaqc, pivot_history, 
-   status, data_full, data_out, checks_final) 
-
+rm(site, data, qaqc, pivot_history, data_full, data_out, checks_final) 
 rm(offsets_to_use, new_offset, offset_cols_to_use, 
    offset_dates_to_use, offset_names_to_use, offset_vals_use)
-rm(ts_cols, not_to_plot, all_cols, all_offset_cols, all_offset_dates,
-   all_offset_names, all_offsets, checks, depth_cols)
+rm(ts_cols, all_cols, all_offset_cols, all_offset_dates,
+   all_offset_names, all_offsets, checks)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# WRITE OUTPUT DATA & CHECKS-------------------------------------------------------
+# Flag and Note the noisy data issue, which I could not solve ------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 # TODO: There appears to be a baro issue creating noisy data Jan-Apr/May 2022.
 # The issue is happening at both North and South baros with slightly different timeframes.
-# Not sure if I can fix the problem, but let's flag it for now. 
+# Was able to mostly fix the data, but the North PT's stilll have some issues
 north_ids <- c("6", "6a", "3", "7")
 south_ids <- c("5", "5a", "15", "9", "14", "13", "14.9")
+flag_wells <- c("5_546", "13_274", "14_610", "14_616")
 
 output_data <- output_data %>% 
-  mutate(basin_id = str_split(Site_ID, '_') %>% map_chr(1)) %>% 
+  mutate(basin_id = str_split(well_id, '_') %>% map_chr(1)) %>% 
   mutate(
     flag = case_when(
-      basin_id %in% south_ids &
-        between(Date, as.Date("2022-01-27"), as.Date("2022-05-27")) ~ 4,
+      well_id %in% flag_wells &
+        between(timestamp, as.POSIXct("2022-01-27"), as.POSIXct("2022-04-15")) ~ 4,
       basin_id %in% north_ids &
-        between(Date, as.Date("2022-01-27"), as.Date("2022-04-09")) ~ 4,
+        (between(timestamp, as.POSIXct("2022-01-27"), as.POSIXct("2022-02-08")) |
+        between(timestamp, as.POSIXct("2022-03-29"), as.POSIXct("2022-04-15")) ) ~ 4,
       TRUE ~ flag
     )
   ) %>% 
   mutate(
     notes = case_when(
-      basin_id %in% south_ids &
-        between(Date, as.Date("2022-01-27"), as.Date("2022-05-27")) ~ 'Peculiarly noisy data for all wells. Baro issue?',
+      well_id %in% flag_wells &
+        between(timestamp, as.POSIXct("2022-01-27"), as.POSIXct("2022-04-15")) ~ 'Peculiarly noisy data for many wells. Baro issue?',
       basin_id %in% north_ids &
-        between(Date, as.Date("2022-01-27"), as.Date("2022-04-09")) ~ 'Peculiarly noisy data for all wells. Baro issue?',
+        ( between(timestamp, as.POSIXct("2022-01-27"), as.POSIXct("2022-04-15")) |
+        between(timestamp, as.POSIXct("2022-03-29"), as.POSIXct("2022-04-15")) ) ~ 'Peculiarly noisy data for many wells. Baro issue?',
       TRUE ~ notes
     )
   ) %>% 
   select(-basin_id)
 
-output_data <- output_data %>% 
-  rename(well_id = Site_ID)
+rm(flag_wells, north_ids, south_ids)
 
-write_csv(
-  output_checks, 
-  'D:/doe_pt_processing/data_bradford/out_data/well_checks_log_Fall2025.csv'
-)
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Write output and data checks -------------------------------------------------------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-write_csv(
-  output_data, 
-  'D:/doe_pt_processing/data_bradford/out_data/waterlevel_offsets_tracked_Fall2025.csv'
-)
+well_ts_offsets_tracked_path <- paste0(out_dir, "bradford_stage_Spring2025_offsets_tracked.csv")
+well_checks_path <- paste0(out_dir, "bradford_well_checks_Spring2025.csv")
 
-output_data_small <- output_data %>% 
-  rename(well_depth = revised_depth) %>% 
-  select(c(Date, well_id, well_depth, flag))
+write_csv(output_data, well_ts_offsets_tracked_path)
+write_csv(output_checks %>% select(-c('timestamp')), well_checks_path)
 
-write_csv(
-  output_data_small, 
-  'D:/doe_pt_processing/data_bradford/out_data/waterlevel_Fall2025.csv'
-)
+
+
 
 
 

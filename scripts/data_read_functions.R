@@ -6,33 +6,33 @@ library(glue)
 library(rlang)
 
 # 
-site_ts_from_xlsx_sheet <- function(compiled_path, site_id) {
+site_ts_from_xlsx_sheet <- function(compiled_path, well_id) {
   
   # if site_id has a wonky slash "/" in the name, change to "." for matching sheet names
-  if(grepl("/", site_id)){
-    site_id <- gsub("/", ".", site_id)
+  if(grepl("/", well_id)){
+    well_id <- gsub("/", ".", well_id)
   }
   
-  data <- read_excel(compiled_path, sheet=site_id) %>% 
-    select(c('Date', 'Site', 'depth', 'sensor_depth')) %>% 
-    rename(original_depth = depth,
-           Site_ID = Site) %>% 
-    mutate(Site_ID = gsub("\\.", "/", Site_ID))
+  data <- read_excel(compiled_path, sheet=well_id) %>% 
+    select(c('timestamp', 'well_id', 'well_depth_m', 'head_m')) %>% 
+    rename(original_depth_m = well_depth_m) %>% 
+    mutate(well_id = gsub("\\.", "/", well_id))
   
   return(data)
 }
 
-fetch_water_checks <- function(meta_path, site_id){
+fetch_water_checks <- function(meta_path, well_id){
   
   check_history <- read_excel(meta_path, 
                               sheet='Wetland_H20_level_history',
                               na=c("", "NA", "#N/A", "N/A"))
   check_history <- check_history %>% 
-    filter(Site_ID == site_id)
+    filter(Site_ID == well_id) %>% 
+    rename(well_id = Site_ID)
   
   # TODO: Update the select cols as we get more checks.
   select_cols <- c(
-    "Site_ID",
+    "well_id",
     "Well_install",
     "H2O_install_cm",
     "H2O_date_1",
@@ -88,14 +88,14 @@ fetch_water_checks <- function(meta_path, site_id){
 }
 
 
-fetch_post_process_status <- function(path, site_id){
+fetch_post_process_status <- function(path, well_id){
   
   # if site_id has a wonky slash "/" in the name, change to "." for matching sheet names
-  if(grepl("/", site_id)){
-    site_id <- gsub("/", ".", site_id)
+  if(grepl("/", well_id)){
+    site_id <- gsub("/", ".", well_id)
   }
   
-  basin_id <- str_split_1(site_id, pattern="_")[1]
+  basin_id <- str_split_1(well_id, pattern="_")[1]
   
   col_spec <- c(
     "Wetland" = "text",
@@ -117,17 +117,17 @@ fetch_post_process_status <- function(path, site_id){
                        na = c("", "NA", "#N/A", "N/A")) %>% 
     # Reading all columns as "text", because of excel's wonky auto formatting. 
     # Dates were listed as integers. 
-    filter(Wetland == site_id) %>% 
-    rename(Site_ID = Wetland) %>% 
-    select(c(Site_ID, Notes))
+    filter(Wetland == well_id) %>% 
+    rename(well_id = Wetland) %>% 
+    select(c(well_id, Notes))
   
   return(status)
 }
 
-fetch_pivot_history <- function(path, site_id){
+fetch_pivot_history <- function(path, well_id){
   
   select_cols <- c(
-    "Site_ID",
+    "well_id",
     "P_G/L_date_1",
     "P_G_cm_1", 
     "P_L_cm_1",
@@ -150,7 +150,8 @@ fetch_pivot_history <- function(path, site_id){
   date_cols <- grep("P_G/L_date_", select_cols, value=TRUE)
   
   pivot_history <- read_excel(path, sheet = "Wetland_pivot_history") %>% 
-    filter(Site_ID == site_id) %>% 
+    filter(Site_ID == well_id) %>% 
+    rename(well_id = Site_ID) %>% 
     select(all_of(select_cols)) %>% 
     mutate(across(all_of(P_G_cols), ~ as.numeric(.)),
            across(all_of(P_L_cols), ~ as.numeric(.)),
