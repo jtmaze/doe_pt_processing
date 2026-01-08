@@ -152,7 +152,7 @@ baro_data <- baro_data %>%
 # 1) Add rounded-to-nearest-hour timestamp
 baro_hourly <- baro_data %>%
   mutate(rounded_hour = round_date(timestamp, unit = "hour")) %>% 
-# 2) Hourly mean per region
+# 2) Hourly
   group_by(rounded_hour) %>%
   summarise(PTbaro = mean(PTbaro, na.rm = TRUE), .groups = "drop") %>% 
   rename(timestamp = rounded_hour)

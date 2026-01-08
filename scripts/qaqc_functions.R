@@ -50,7 +50,8 @@ anomaly_remover <- function(df, revised_depth_col) {
 }
 
 calc_stages_from_offsets <- function(ts_data, pivot_history){
-  
+  # Used this function to determine proper offset in Bradford well data
+  # there were many well measurements per well, some were low confidence.
   data_full <- merge(ts_data, pivot_history, by="well_id", all=TRUE) %>% 
     # P to G and P to L columns are redundant, bc offsets are calculated. 
     select(
@@ -152,7 +153,7 @@ make_site_ts <- function(site_ts,
 calculate_chk_ts_diffs <- function(ts, qaqc_df, version){
 # Calculates the difference between sensor timeseries and the QAQC dataframe.
 # Inputs: 
-#   - ts: a dataframe with timeseries data. Must include a column named "Date" and 
+#   - ts: a dataframe with timeseries data. Must include a column named "timestamp" and 
 #         a numeric column corresponding to the value specified by 'version'.
 #   - qaqc_df: a dataframe with water level checks and dates. Must include columns "date" and "meter".
 #   - version: a string indicating the column name in 'ts' to use.
@@ -162,10 +163,10 @@ calculate_chk_ts_diffs <- function(ts, qaqc_df, version){
   for(i in seq_len(nrow(qaqc_df))) {
     # Extract the observation date and QAQC meter value for the current row.
     obs_date <- qaqc_df$date[i]
-    chk_m <- qaqc_df$meter[i]
+    chk_m <- as.numeric(qaqc_df$meter[i])
     logger_date <- ts %>% 
       mutate(Date_only = as.Date(timestamp)) %>% 
-      # Extract +-1 day incase download day was deleted. 
+      # Extract +-2 day incase download day was deleted. 
       filter(Date_only >= obs_date - lubridate::days(2),
              Date_only <= obs_date + lubridate::days(2)) %>% 
       pull(!!sym(version))
@@ -361,5 +362,46 @@ quick_plot_offset2 <- function(offsets_to_use){
     scale_x_discrete(limits = c(unique(combined$offset_id), "Mean"))
   
   print(p)
+}
+
+offset_history_from_previous <- function(previous_df){
+  
+  offset_history <- previous_df %>% 
+    group_by(offset_version) %>% 
+    summarise(
+      value = first(offset_value),
+      begin_date = first(timestamp),
+      .groups = "drop"
+    ) %>% 
+    arrange(begin_date) %>% 
+    mutate(
+      end_date = lead(begin_date)
+    )
+  
+  return(offset_history)
+}
+
+flag_history_from_previous <- function(previous_df){
+  
+  # NOTE: timeseries is already filtered for well_id
+  well_id <- first(previous_df$well_id) 
+  
+  flag_summary <- previous_df %>%
+    arrange(timestamp) %>%
+    mutate(
+      flag_run = cumsum(flag != lag(flag, default = first(flag)))
+    ) %>%
+    group_by(flag_run) %>%
+    reframe(
+      begin_date = first(timestamp),
+      end_date   = last(timestamp),
+      flag       = first(flag),
+      notes      = unique(notes)
+    ) %>% 
+    mutate(well_id = well_id) %>% 
+    filter(flag != 0 & flag != 2) %>%
+    select(-c(flag_run))
+  
+  return(flag_summary)
 }
 
