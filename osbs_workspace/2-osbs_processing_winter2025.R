@@ -978,9 +978,9 @@ rm(merged_site, raw_ts, previous_ts, offset_val)
 output <- bind_rows(output_timeseries) %>% 
   select(-c('rolling_median', 'residuals'))
 
-ts_out_path <- paste0(out_dir, "osbs_well_depth_Fall2025")
-dimensions_out_path <- paste0(out_dir, "osbs_well_dimensions_Fall2025")
-flags_out_path <- paste0(out_dir, "osbs_well_flags_Fall2025")
+ts_out_path <- paste0(out_dir, "osbs_well_depth_Fall2025.csv")
+dimensions_out_path <- paste0(out_dir, "osbs_well_dimensions_Fall2025.csv")
+flags_out_path <- paste0(out_dir, "osbs_well_flags_Fall2025.csv")
 
 write_csv(output, ts_out_path)
 write_csv(well_dimensions, dimensions_out_path)

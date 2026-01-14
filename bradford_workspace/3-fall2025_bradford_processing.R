@@ -319,10 +319,10 @@ make_site_ts(merged_ts, 'well_depth_m', site_checks %>% rename(meter = field_che
 merged_ts <- merged_ts %>% 
   mutate(
     flag = case_when(
-      well_depth_m <= -0.70 ~ 2,
+      well_depth_m <= -0.66 ~ 2,
       TRUE ~ flag),
     notes = case_when(
-      well_depth_m <= -0.70 ~ "Well bottomed out",
+      well_depth_m <= -0.66 ~ "Well bottomed out",
       TRUE ~ notes),
   )
 
@@ -1371,10 +1371,10 @@ make_site_ts(merged_ts, 'well_depth_m', site_checks %>% rename(meter = field_che
 merged_ts <- merged_ts %>% 
   mutate(
     flag = case_when(
-      well_depth_m <= -0.67 ~ 2,
+      well_depth_m <= -0.65 ~ 2,
       TRUE ~ flag),
     notes = case_when(
-      well_depth_m <= -0.67 ~ "Well bottomed out",
+      well_depth_m <= -0.65 ~ "Well bottomed out",
       TRUE ~ notes),
   )
 
@@ -1868,10 +1868,10 @@ make_site_ts(merged_ts, 'well_depth_m', site_checks %>% rename(meter = field_che
 merged_ts <- merged_ts %>% 
   mutate(
     flag = case_when(
-      well_depth_m <= -0.69 ~ 2,
+      well_depth_m <= -0.66 ~ 2,
       TRUE ~ flag),
     notes = case_when(
-      well_depth_m <= -0.69 ~ "Well bottomed out",
+      well_depth_m <= -0.66 ~ "Well bottomed out",
       TRUE ~ notes),
   )
 
@@ -1939,10 +1939,10 @@ make_site_ts(merged_ts, 'well_depth_m', site_checks %>% rename(meter = field_che
 merged_ts <- merged_ts %>% 
   mutate(
     flag = case_when(
-      timestamp >= as.POSIXct("2025-02-25 00:00:00") & well_depth_m <= -0.42 ~ 2,
+      timestamp >= as.POSIXct("2025-02-25 00:00:00") & well_depth_m <= -0.40 ~ 2,
       TRUE ~ flag),
     notes = case_when(
-      timestamp >= as.POSIXct("2025-02-25 00:00:00") & well_depth_m <= -0.42 ~ "Well bottomed out",
+      timestamp >= as.POSIXct("2025-02-25 00:00:00") & well_depth_m <= -0.40 ~ "Well bottomed out",
       TRUE ~ notes),
   )
 
@@ -2222,10 +2222,10 @@ make_site_ts(merged_ts, 'well_depth_m', site_checks %>% rename(meter = field_che
 merged_ts <- merged_ts %>% 
   mutate(
     flag = case_when(
-      well_depth_m <= -0.60 ~ 2,
+      well_depth_m <= -0.57 ~ 2,
       TRUE ~ flag),
     notes = case_when(
-      well_depth_m <= -0.60 ~ "Well bottomed out",
+      well_depth_m <= -0.57 ~ "Well bottomed out",
       TRUE ~ notes),
   )
 
@@ -3174,10 +3174,10 @@ make_site_ts(merged_ts, 'well_depth_m', site_checks %>% rename(meter = field_che
 merged_ts <- merged_ts %>% 
   mutate(
     flag = case_when(
-      well_depth_m <= -0.74 ~ 2,
+      well_depth_m <= -0.72 ~ 2,
       TRUE ~ flag),
     notes = case_when(
-      well_depth_m <= -0.74 ~ "Well bottomed out",
+      well_depth_m <= -0.72 ~ "Well bottomed out",
       TRUE ~ notes),
   )
 
@@ -3384,10 +3384,10 @@ make_site_ts(merged_ts, 'well_depth_m', site_checks %>% rename(meter = field_che
 merged_ts <- merged_ts %>% 
   mutate(
     flag = case_when(
-      well_depth_m <= -0.53 ~ 2,
+      well_depth_m <= -0.50 ~ 2,
       TRUE ~ flag),
     notes = case_when(
-      well_depth_m <= -0.53 ~ "Well bottomed out",
+      well_depth_m <= -0.50 ~ "Well bottomed out",
       TRUE ~ notes),
   )
 
@@ -3899,6 +3899,20 @@ rm(raw_ts, previous_ts, merged_ts, site_checks, flag_summary)
 output <- bind_rows(output_timeseries)
 checks <- bind_rows(output_checks)
 flags <- bind_rows(output_flags)
+
+output <- output %>% 
+  mutate(
+    flag = case_when(
+      timestamp >= as.POSIXct("2025-08-29") & 
+        timestamp <= as.POSIXct("2025-09-26") & 
+        flag == 0 ~ 4,
+      TRUE ~ flag
+    ),
+    notes = case_when(
+      flag == 4 ~ "Missing baro data needed to gap-fill from FAWN data.",
+      TRUE ~ notes
+    )
+  )
 
 out_ts_path <- paste0(out_dir, "bradford_stage_Winter2025_offsets_tracked.csv")
 out_checks_path <- paste0(out_dir, "bradford_stage_Winter2025_checks.csv")
